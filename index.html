@@ -15,27 +15,43 @@ text-align:center;
 }
 
 .header{
-padding-top:40px;
+padding:40px 20px 30px;
+}
+
+.brand-row{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:24px;
+flex-wrap:wrap;
 }
 
 .logo{
-width:300px;
+width:110px;
+height:auto;
 filter:drop-shadow(0px 0px 20px cyan);
+flex-shrink:0;
+}
+
+.brand-text{
+text-align:left;
 }
 
 .title{
 font-size:55px;
 font-weight:bold;
-margin-top:15px;
+margin:0;
+line-height:1.1;
 background:linear-gradient(to right,gold,silver,cyan);
 -webkit-background-clip:text;
 -webkit-text-fill-color:transparent;
+background-clip:text;
 }
 
 .subtitle{
 font-size:20px;
 color:#cbd5e1;
-margin-bottom:40px;
+margin:10px 0 0;
 }
 
 .market-container{
@@ -71,6 +87,21 @@ background:#020617;
 color:#94a3b8;
 }
 
+@media (max-width: 600px){
+.logo{
+width:80px;
+}
+.title{
+font-size:40px;
+}
+.brand-text{
+text-align:center;
+}
+.brand-row{
+flex-direction:column;
+}
+}
+
 </style>
 
 </head>
@@ -79,12 +110,17 @@ color:#94a3b8;
 
 <div class="header">
 
-<img src="logo.png" class="logo">
+<div class="brand-row">
 
+<img src="logo.png" class="logo" alt="LexorA Logo">
+
+<div class="brand-text">
 <div class="title">LexorA</div>
-
 <div class="subtitle">
 Future Smart Browser with Live Market System
+</div>
+</div>
+
 </div>
 
 </div>
@@ -101,7 +137,7 @@ Future Smart Browser with Live Market System
 <div class="price">₹ 85 / gram</div>
 </div>
 
-</div>
+</motion>
 
 <div class="footer">
 © 2026 LexorA Browser
