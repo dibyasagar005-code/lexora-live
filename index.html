@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LexorA Browser</title>
+  <title>LexorA </title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -17,7 +20,11 @@
       <span class="dot yellow"></span>
       <span class="dot green"></span>
     </div>
-    <span class="titlebar-name">LexorA Browser</span>
+    <div class="titlebar-name">
+      <div class="lexora-logo lexora-logo--bar">
+        <span class="logo-lexor">Lexor</span><span class="logo-a">A</span>
+      </div>
+    </div>
     <div class="titlebar-spacer"></div>
   </div>
 
@@ -41,9 +48,9 @@
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <img src="logo.png" class="sidebar-logo" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="sidebar-logo-fallback" style="display:none">L</div>
-        <span>LexorA</span>
+        <div class="lexora-logo lexora-logo--side">
+          <span class="logo-lexor">Lexor</span><span class="logo-a">A</span>
+        </div>
       </div>
       <button class="nav-item active" data-view="home">
         <span class="nav-icon">&#127968;</span> Home
@@ -74,13 +81,10 @@
       <!-- HOME -->
       <section class="view active" id="view-home">
         <div class="hero">
-          <div class="brand-row">
-            <img src="logo.png" class="hero-logo" alt="LexorA" onerror="this.outerHTML='<div class=\'hero-logo-svg\'><svg viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\'><circle cx=\'40\' cy=\'40\' r=\'36\' fill=\'none\' stroke=\'#00ffff\' stroke-width=\'3\'/><text x=\'40\' y=\'48\' text-anchor=\'middle\' fill=\'#ffd700\' font-size=\'28\' font-weight=\'bold\'>L</text></svg></div>'">
-            <div class="brand-text">
-              <h1 class="hero-title">LexorA</h1>
-              <p class="hero-sub">Future Smart Browser with Live Market System</p>
-            </div>
+          <div class="lexora-logo lexora-logo--hero">
+            <span class="logo-lexor">Lexor</span><span class="logo-a">A</span>
           </div>
+          <p class="hero-sub">Future Smart Browser with Live Market System</p>
         </div>
         <div class="quick-cards" id="homeCards"></div>
         <p class="hint">Use the sidebar to open Markets, Dashboard, Calculator, and more.</p>
