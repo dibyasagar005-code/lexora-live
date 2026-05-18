@@ -1,15 +1,85 @@
+<!DOCTYPE html>
+font-size:18px;
+color:#cbd5e1;
+margin-bottom:40px;
+}
+
+.market-container{
+display:flex;
+justify-content:center;
+flex-wrap:wrap;
+gap:30px;
+}
+
+padding-bottom:40px;
+.box{
+background:rgba(30,41,59,0.9);
+width:320px;
+padding:30px;
+border-radius:25px;
+box-shadow:0px 0px 25px rgba(0,255,255,0.3);
+transition:0.4s;
+}
+
+.box:hover{
+transform:scale(1.05);
+box-shadow:0px 0px 35px rgba(255,215,0,0.7);
+}
+
+.box h2{
+font-size:30px;
+margin-bottom:15px;
+}
+
+.price{
+font-size:35px;
+font-weight:bold;
+color:#00ffff;
+}
+
+.footer{
+margin-top:40px;
+padding:20px;
+background:#020617;
+font-size:16px;
+color:#94a3b8;
+}
+
+</style>
+
+</head>
+
 <body>
 
-<img src="logo.png" width="300">
+<div class="header">
+
+<img src="logo.png" class="logo">
+
+<div class="title">LexorA</div>
+
+<div class="subtitle">
+Future Smart Browser with Live Market System
+</div>
+
+</div>
+
+<div class="market-container">
 
 <div class="box">
 <h2>💰 Gold Price</h2>
-<p>₹ 6200 / gram</p>
+<div class="price">₹ 6200 / gram</div>
 </div>
 
 <div class="box">
 <h2>🪙 Silver Price</h2>
-<p>₹ 85 / gram</p>
+<div class="price">₹ 85 / gram</div>
+</div>
+
+</div>
+
+<div class="footer">
+© 2026 LexorA Browser | Designed by Dibya Sagar Sahoo
 </div>
 
 </body>
+</html>
