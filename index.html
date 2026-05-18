@@ -1,3 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LexorA Browser</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="browser" id="browser">
+
+  <!-- Title bar -->
+  <div class="titlebar">
+    <div class="window-controls">
+      <span class="dot red"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    <span class="titlebar-name">LexorA Browser</span>
+    <div class="titlebar-spacer"></div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tabbar" id="tabbar"></div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="tool-btn" id="btnBack" title="Back">&#8592;</button>
+    <button class="tool-btn" id="btnForward" title="Forward">&#8594;</button>
+    <button class="tool-btn" id="btnRefresh" title="Refresh prices">&#8635;</button>
+    <div class="address-wrap">
+      <span class="address-icon">&#128274;</span>
+      <input type="text" class="address-bar" id="addressBar" readonly>
+    </div>
+    <button class="tool-btn live-badge" id="liveBadge">LIVE</button>
+  </div>
+
+  <div class="main-layout">
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <img src="logo.png" class="sidebar-logo" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="sidebar-logo-fallback" style="display:none">L</div>
+        <span>LexorA</span>
+      </div>
+      <button class="nav-item active" data-view="home">
+        <span class="nav-icon">&#127968;</span> Home
+      </button>
+      <button class="nav-item" data-view="markets">
+        <span class="nav-icon">&#128200;</span> Live Markets
+      </button>
+      <button class="nav-item" data-view="dashboard">
+        <span class="nav-icon">&#128202;</span> Dashboard
+      </button>
+      <button class="nav-item" data-view="watchlist">
+        <span class="nav-icon">&#11088;</span> Watchlist
+      </button>
+      <button class="nav-item" data-view="calculator">
+        <span class="nav-icon">&#129518;</span> Calculator
+      </button>
+      <button class="nav-item" data-view="history">
+        <span class="nav-icon">&#128337;</span> Price History
+      </button>
+      <button class="nav-item" data-view="settings">
+        <span class="nav-icon">&#9881;</span> Settings
+      </button>
+    </nav>
+
+    <!-- Content area -->
+    <main class="content" id="content">
+
+      <!-- HOME -->
+      <section class="view active" id="view-home">
+        <div class="hero">
+          <div class="brand-row">
+            <img src="logo.png" class="hero-logo" alt="LexorA" onerror="this.outerHTML='<div class=\'hero-logo-svg\'><svg viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\'><circle cx=\'40\' cy=\'40\' r=\'36\' fill=\'none\' stroke=\'#00ffff\' stroke-width=\'3\'/><text x=\'40\' y=\'48\' text-anchor=\'middle\' fill=\'#ffd700\' font-size=\'28\' font-weight=\'bold\'>L</text></svg></div>'">
+            <div class="brand-text">
+              <h1 class="hero-title">LexorA</h1>
+              <p class="hero-sub">Future Smart Browser with Live Market System</p>
+            </div>
+          </div>
+        </div>
+        <div class="quick-cards" id="homeCards"></div>
+        <p class="hint">Use the sidebar to open Markets, Dashboard, Calculator, and more.</p>
+      </section>
+
+      <!-- MARKETS -->
+      <section class="view" id="view-markets">
+        <h2 class="view-title">Live Markets</h2>
+        <p class="view-desc">Gold &amp; Silver spot prices converted to INR per gram</p>
+        <div class="status-line" id="marketStatus">Loading live prices...</div>
+        <div class="market-grid" id="marketGrid"></div>
+        <div class="detail-panel" id="detailPanel"></div>
+      </section>
+
+      <!-- DASHBOARD -->
+      <section class="view" id="view-dashboard">
+        <h2 class="view-title">Market Dashboard</h2>
+        <div class="dash-stats" id="dashStats"></div>
+        <div class="dash-charts">
+          <div class="chart-card">
+            <h3>Gold vs Silver (INR / gram)</h3>
+            <canvas id="chartCompare" height="200"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>USD / INR Rate</h3>
+            <div class="rate-big" id="usdInrRate">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WATCHLIST -->
+      <section class="view" id="view-watchlist">
+        <h2 class="view-title">Watchlist</h2>
+        <table class="watch-table">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Price (INR/g)</th>
+              <th>USD/oz</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody"></tbody>
+        </table>
+      </section>
+
+      <!-- CALCULATOR -->
+      <section class="view" id="view-calculator">
+        <h2 class="view-title">Metal Value Calculator</h2>
+        <div class="calc-box">
+          <label>Metal</label>
+          <select id="calcMetal">
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+          </select>
+          <label>Weight (grams)</label>
+          <input type="number" id="calcGrams" value="10" min="0.01" step="0.01">
+          <button class="btn-primary" id="calcBtn">Calculate</button>
+          <div class="calc-result" id="calcResult">Enter weight and click Calculate</div>
+        </div>
+      </section>
 
       <!-- HISTORY -->
       <section class="view" id="view-history">
@@ -6,6 +150,7 @@
         <canvas id="chartHistory" height="260"></canvas>
         <div class="history-log" id="historyLog"></div>
       </section>
+
       <!-- SETTINGS -->
       <section class="view" id="view-settings">
         <h2 class="view-title">Settings</h2>
@@ -19,14 +164,18 @@
           <p class="settings-note">Data source: metals.live (USD spot) + Frankfurter (USD/INR). Requires internet.</p>
         </div>
       </section>
+
     </main>
   </div>
+
   <!-- Status bar -->
   <div class="statusbar">
     <span id="statusLeft">Ready</span>
     <span id="statusRight">Last update: —</span>
   </div>
+
 </div>
+
 <script src="app.js"></script>
 </body>
 </html>
