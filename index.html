@@ -1,5 +1,40 @@
 <!DOCTYPE html>
-font-size:18px;
+<html>
+<head>
+
+<title>LexorA</title>
+
+<style>
+
+body{
+margin:0;
+padding:0;
+font-family:Arial;
+background:linear-gradient(135deg,#050816,#0b1220,#111827);
+color:white;
+text-align:center;
+}
+
+.header{
+padding-top:40px;
+}
+
+.logo{
+width:300px;
+filter:drop-shadow(0px 0px 20px cyan);
+}
+
+.title{
+font-size:55px;
+font-weight:bold;
+margin-top:10px;
+background:linear-gradient(to right,gold,silver,cyan);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+}
+
+.subtitle{
+font-size:20px;
 color:#cbd5e1;
 margin-bottom:40px;
 }
@@ -9,21 +44,15 @@ display:flex;
 justify-content:center;
 flex-wrap:wrap;
 gap:30px;
+padding-bottom:40px;
 }
 
-padding-bottom:40px;
 .box{
 background:rgba(30,41,59,0.9);
 width:320px;
 padding:30px;
 border-radius:25px;
 box-shadow:0px 0px 25px rgba(0,255,255,0.3);
-transition:0.4s;
-}
-
-.box:hover{
-transform:scale(1.05);
-box-shadow:0px 0px 35px rgba(255,215,0,0.7);
 }
 
 .box h2{
