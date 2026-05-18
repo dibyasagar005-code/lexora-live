@@ -1,147 +1,32 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>LexorA</title>
 
-<style>
-
-body{
-margin:0;
-padding:0;
-font-family:Arial,sans-serif;
-background:linear-gradient(135deg,#050816,#0b1220,#111827);
-color:white;
-text-align:center;
-}
-
-.header{
-padding:40px 20px 30px;
-}
-
-.brand-row{
-display:flex;
-align-items:center;
-justify-content:center;
-gap:24px;
-flex-wrap:wrap;
-}
-
-.logo{
-width:110px;
-height:auto;
-filter:drop-shadow(0px 0px 20px cyan);
-flex-shrink:0;
-}
-
-.brand-text{
-text-align:left;
-}
-
-.title{
-font-size:55px;
-font-weight:bold;
-margin:0;
-line-height:1.1;
-background:linear-gradient(to right,gold,silver,cyan);
--webkit-background-clip:text;
--webkit-text-fill-color:transparent;
-background-clip:text;
-}
-
-.subtitle{
-font-size:20px;
-color:#cbd5e1;
-margin:10px 0 0;
-}
-
-.market-container{
-display:flex;
-justify-content:center;
-flex-wrap:wrap;
-gap:30px;
-padding-bottom:40px;
-}
-
-.box{
-background:#1e293b;
-width:320px;
-padding:30px;
-border-radius:25px;
-box-shadow:0px 0px 25px rgba(0,255,255,0.3);
-}
-
-.box h2{
-font-size:30px;
-}
-
-.price{
-font-size:35px;
-font-weight:bold;
-color:#00ffff;
-}
-
-.footer{
-margin-top:40px;
-padding:20px;
-background:#020617;
-color:#94a3b8;
-}
-
-@media (max-width: 600px){
-.logo{
-width:80px;
-}
-.title{
-font-size:40px;
-}
-.brand-text{
-text-align:center;
-}
-.brand-row{
-flex-direction:column;
-}
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="header">
-
-<div class="brand-row">
-
-<img src="logo.png" class="logo" alt="LexorA Logo">
-
-<div class="brand-text">
-<div class="title">LexorA</div>
-<div class="subtitle">
-Future Smart Browser with Live Market System
+      <!-- HISTORY -->
+      <section class="view" id="view-history">
+        <h2 class="view-title">Session Price History</h2>
+        <p class="view-desc">Prices recorded each time live data refreshes</p>
+        <canvas id="chartHistory" height="260"></canvas>
+        <div class="history-log" id="historyLog"></div>
+      </section>
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <h2 class="view-title">Settings</h2>
+        <div class="settings-box">
+          <label>Auto-refresh interval (seconds)</label>
+          <input type="number" id="refreshInterval" value="60" min="15" max="300">
+          <label>
+            <input type="checkbox" id="soundAlert" checked> Show price change highlight
+          </label>
+          <button class="btn-primary" id="saveSettings">Save Settings</button>
+          <p class="settings-note">Data source: metals.live (USD spot) + Frankfurter (USD/INR). Requires internet.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <!-- Status bar -->
+  <div class="statusbar">
+    <span id="statusLeft">Ready</span>
+    <span id="statusRight">Last update: —</span>
+  </div>
 </div>
-</div>
-
-</div>
-
-</div>
-
-<div class="market-container">
-
-<div class="box">
-<h2>💰 Gold Price</h2>
-<div class="price">₹ 6200 / gram</div>
-</div>
-
-<div class="box">
-<h2>🪙 Silver Price</h2>
-<div class="price">₹ 85 / gram</div>
-</div>
-
-</motion>
-
-<div class="footer">
-© 2026 LexorA Browser
-</div>
-
+<script src="app.js"></script>
 </body>
 </html>
