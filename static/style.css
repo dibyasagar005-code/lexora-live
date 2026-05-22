@@ -19,6 +19,11 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+
 body {
     font-family: var(--font);
     background: var(--bg-dark);
@@ -211,6 +216,13 @@ body.menu-open { overflow: hidden; }
     margin-left: 260px;
     padding: 32px;
     max-width: 1400px;
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+}
+.page-view {
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .mobile-menu-btn {
@@ -339,9 +351,23 @@ body.menu-open { overflow: hidden; }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .symbol-name { font-weight: 600; color: var(--gold); }
 .live-dot { width: 6px; height: 6px; background: var(--positive); border-radius: 50%; animation: blink 1s infinite; }
-.card-price { font-size: 1.5rem; font-weight: 700; color: var(--text); transition: color 0.35s, transform 0.25s; }
-.card-price.price-flash { color: var(--cyan); transform: scale(1.03); }
+.card-price-main {
+    font-size: clamp(1.1rem, 4.5vw, 1.55rem);
+    font-weight: 700;
+    color: var(--cyan);
+    line-height: 1.25;
+    word-break: break-word;
+}
+.card-price-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 4px 0 8px;
+}
+.card-price { font-size: 1.5rem; font-weight: 700; color: var(--cyan); }
+.card-price-main.price-flash, .card-price.price-flash { color: var(--gold); }
 .page-view { display: none; animation: fadeIn 0.35s ease; }
+.price-main-cell { font-weight: 700; color: var(--cyan); white-space: nowrap; }
+.price-sub-cell { color: var(--text-muted); font-size: 11px; }
 .page-view[data-page="home"] { display: block; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
@@ -415,7 +441,16 @@ body.menu-open { overflow: hidden; }
 .trend-bullish { color: var(--positive); }
 .trend-bearish { color: var(--negative); }
 
-.symbol-selector { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.symbol-selector {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    max-width: 100%;
+}
 .symbol-chip {
     padding: 8px 16px;
     background: rgba(0,240,255,0.05);
@@ -448,16 +483,41 @@ body.menu-open { overflow: hidden; }
 }
 
 /* Charts */
-.chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; }
-.chart-card { padding: 24px; }
-.chart-card h4 { color: var(--cyan); margin-bottom: 16px; font-size: 14px; }
-.chart-card canvas { max-height: 300px; }
+.chart-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: 16px;
+    max-width: 100%;
+}
+.chart-card {
+    padding: 16px;
+    min-width: 0;
+    overflow: hidden;
+}
+.chart-card h4 { color: var(--cyan); margin-bottom: 12px; font-size: 14px; }
+.chart-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 240px;
+    max-width: 100%;
+    overflow: hidden;
+}
+.chart-canvas-tall { height: 280px; }
+.chart-canvas-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+}
 .full-width { grid-column: 1 / -1; }
 .mt-4 { margin-top: 24px; }
 
 /* Markets table */
-.markets-table-wrap { overflow-x: auto; }
-.markets-table { width: 100%; border-collapse: collapse; }
+.markets-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+.markets-table { width: 100%; min-width: 520px; border-collapse: collapse; }
 .markets-table th, .markets-table td {
     padding: 14px 16px;
     text-align: left;
@@ -704,12 +764,27 @@ body.menu-open { overflow: hidden; }
     }
     .sidebar.open { transform: translateX(0); }
     .sidebar-close { display: block; }
-    .main-content { margin-left: 0; padding: 16px; padding-top: 52px; padding-bottom: 24px; }
-    .mobile-menu-btn { display: block; }
+    .main-content {
+      margin-left: 0;
+      padding: 12px;
+      padding-top: 48px;
+      padding-bottom: 24px;
+      max-width: 100vw;
+    }
+    .mobile-menu-btn { display: block; top: 44px; }
     .sidebar-brand h1 { font-size: 1.65rem; }
     .logo-icon { font-size: 2.5rem; }
+    .page-header h2 { font-size: 1.25rem; word-break: break-word; }
+    .page-header p { font-size: 13px; }
+    .hero-grid { grid-template-columns: 1fr; }
     .prediction-hero { grid-template-columns: 1fr; }
+    .pred-metrics { grid-template-columns: 1fr; }
+    .current-price { font-size: 1.75rem; word-break: break-word; }
     .chart-row { grid-template-columns: 1fr; }
+    .chart-canvas-wrap { height: 220px; }
+    .chart-canvas-tall { height: 250px; }
+    .market-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .market-tabs .tab { flex-shrink: 0; }
     .calc-toolbar { flex-direction: column; align-items: stretch; }
     .calc-output-row { flex-direction: column; align-items: flex-start; }
     .calc-amount { text-align: left; font-size: 1.35rem; }
@@ -721,6 +796,9 @@ body.menu-open { overflow: hidden; }
 }
 @media (max-width: 480px) {
     .market-grid { grid-template-columns: 1fr; }
+    .signals-grid { grid-template-columns: 1fr; }
     .calc-tabs .tab { min-width: 100%; }
-    .markets-table-wrap { overflow-x: auto; }
+    .news-ticker { padding: 6px 10px; }
+    .ticker-content { font-size: 11px; }
+    .card-price-main { font-size: 1.25rem; }
 }

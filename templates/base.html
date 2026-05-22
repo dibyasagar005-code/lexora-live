@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}LexorA — Luxury Exchange Of Real-time Assets{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     {% block head %}{% endblock %}
 </head>
@@ -95,9 +95,9 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='api.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='charts.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='app.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='api.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='charts.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=5"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         if (typeof LexoraAPI !== "undefined") LexoraAPI.fetchFxRates();

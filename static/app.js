@@ -47,9 +47,11 @@ const LexoraApp = {
       el.classList.toggle("active", el.dataset.page === page);
     });
     this.closeMobileSidebar();
-    if (page === "markets") this.renderMarketsTable();
+    if (page === "markets") {
+      this.renderMarketsTable();
+      if (this.market) LexoraCharts.initLivePriceChart("livePriceChart", this.market);
+    }
     if (page === "prediction") this.loadPrediction(document.querySelector(".symbol-chip.active")?.dataset.sym || "bitcoin");
-    if (page === "markets" && document.getElementById("livePriceChart")) LexoraCharts.initLivePriceChart("livePriceChart");
     if (page === "calculator") this.syncCalculatorLivePrices();
   },
 
@@ -119,8 +121,7 @@ const LexoraApp = {
       if (pulse) pulse.textContent = this.market.source === "live" ? "● LIVE" : "● Fallback";
       if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
-      LexoraCharts.initComparisonChart("comparisonChart");
-      LexoraCharts.initVolatilityChart("volatilityChart");
+      LexoraCharts.refreshAll(this.market);
       this.loadQuickSignals();
       this.loadMarketSignals();
     } catch (e) {
@@ -139,17 +140,20 @@ const LexoraApp = {
   updateMarketCards(market) {
     if (!market?.assets) return;
     Object.entries(market.assets).forEach(([symbol, asset]) => {
+      const display = LexoraAPI.priceDisplay(symbol, asset, this.currency);
       document.querySelectorAll(`[data-symbol="${symbol}"]`).forEach((card) => {
-        const priceEl = card.querySelector(".card-price, .price-cell");
+        const mainEl = card.querySelector(".card-price-main, .card-price");
+        const subEl = card.querySelector(".card-price-sub");
         const changeEl = card.querySelector(".card-change");
-        if (priceEl) {
-          priceEl.classList.add("price-flash");
-          priceEl.textContent = this.formatPrice(symbol, asset.price);
-          setTimeout(() => priceEl.classList.remove("price-flash"), 500);
+        if (mainEl) {
+          mainEl.classList.add("price-flash");
+          mainEl.textContent = display.primary;
+          setTimeout(() => mainEl.classList.remove("price-flash"), 500);
         }
+        if (subEl) subEl.textContent = display.secondary || "";
         if (changeEl) {
           const ch = asset.change || 0;
-          changeEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "%";
+          changeEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "% (24h)";
           changeEl.className = "card-change " + (ch >= 0 ? "positive" : "negative");
         }
       });
@@ -162,7 +166,8 @@ const LexoraApp = {
     grid.innerHTML = Object.keys(LexoraAPI.FALLBACK).map((sym) => `
       <div class="market-card" data-symbol="${sym}">
         <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="live-dot"></span></div>
-        <div class="card-price">—</div>
+        <div class="card-price-main">—</div>
+        <div class="card-price-sub"></div>
         <div class="card-change">—</div>
         <a href="#" class="card-link" data-goto-pred="${sym}">Predict →</a>
       </div>`).join("");
@@ -179,14 +184,19 @@ const LexoraApp = {
   renderMarketsTable() {
     const body = document.getElementById("marketsBody");
     if (!body || !this.market?.assets) return;
-    body.innerHTML = Object.entries(this.market.assets).map(([sym, a]) => `
-      <tr data-symbol="${sym}">
-        <td><strong>${LexoraAPI.label(sym)}</strong></td>
-        <td class="price-cell">${this.formatPrice(sym, a.price)}</td>
-        <td class="${(a.change || 0) >= 0 ? "positive" : "negative"}">${(a.change || 0) >= 0 ? "+" : ""}${(a.change || 0).toFixed(2)}%</td>
+    body.innerHTML = Object.entries(this.market.assets)
+      .map(([sym, a]) => {
+        const d = LexoraAPI.priceDisplay(sym, a, this.currency);
+        const ch = a.change || 0;
+        return `<tr data-symbol="${sym}">
+        <td><strong>${LexoraAPI.label(sym)}</strong><br><small class="price-sub-cell">${d.secondary || ""}</small></td>
+        <td class="price-cell"><span class="price-main-cell">${d.primary}</span></td>
+        <td class="${ch >= 0 ? "positive" : "negative"}">${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%</td>
         <td><span class="signal-badge hold" data-signal="${sym}">—</span></td>
         <td><button type="button" class="btn btn-sm btn-outline" data-analyze="${sym}">Analyze</button></td>
-      </tr>`).join("");
+      </tr>`;
+      })
+      .join("");
     body.querySelectorAll("[data-analyze]").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".symbol-chip").forEach((c) => c.classList.toggle("active", c.dataset.sym === btn.dataset.analyze));
@@ -296,7 +306,10 @@ const LexoraApp = {
         });
         this.applyMoneyLabels();
         this.updateFxBadge();
-        if (this.market) this.updateMarketCards(this.market);
+        if (this.market) {
+          this.updateMarketCards(this.market);
+          LexoraCharts.refreshAll(this.market);
+        }
         if (this.currentPage === "markets") this.renderMarketsTable();
       });
     });

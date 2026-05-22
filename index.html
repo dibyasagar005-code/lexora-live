@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LexorA — Luxury Exchange Of Real-time Assets</title>
-  <link rel="stylesheet" href="static/style.css?v=4">
+  <link rel="stylesheet" href="static/style.css?v=5">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -88,8 +88,8 @@
         </section>
         <section class="section">
           <div class="chart-row">
-            <div class="chart-card glass"><h4>Market Comparison</h4><canvas id="comparisonChart"></canvas></div>
-            <div class="chart-card glass"><h4>Volatility Index</h4><canvas id="volatilityChart"></canvas></div>
+            <div class="chart-card glass"><h4>Market Comparison (24h %)</h4><div class="chart-canvas-wrap"><canvas id="comparisonChart"></canvas></div></div>
+            <div class="chart-card glass"><h4>Volatility Index</h4><div class="chart-canvas-wrap"><canvas id="volatilityChart"></canvas></div></div>
           </div>
         </section>
       </div>
@@ -114,7 +114,7 @@
           </table>
         </div>
         <div class="chart-row mt-4">
-          <div class="chart-card glass full-width"><h4>Live Price Stream</h4><canvas id="livePriceChart"></canvas></div>
+          <div class="chart-card glass full-width"><h4>Live Price Stream (30-day trend)</h4><div class="chart-canvas-wrap chart-canvas-tall"><canvas id="livePriceChart"></canvas></div></div>
         </div>
       </div>
 
@@ -250,8 +250,8 @@
     </main>
   </div>
 
-  <script src="static/api.js?v=4"></script>
-  <script src="static/charts.js?v=4"></script>
-  <script src="static/app.js?v=4"></script>
+  <script src="static/api.js?v=5"></script>
+  <script src="static/charts.js?v=5"></script>
+  <script src="static/app.js?v=5"></script>
 </body>
 </html>

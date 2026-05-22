@@ -64,45 +64,112 @@ const LexoraAPI = {
     }
   },
 
+  async fetchWithProxies(path) {
+    const urls = [
+      path,
+      "https://corsproxy.io/?" + encodeURIComponent(path),
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(path),
+    ];
+    for (const url of urls) {
+      try {
+        return await this.fetchJson(url);
+      } catch (e) { /* next */ }
+    }
+    throw new Error("All proxies failed");
+  },
+
   yahooChartUrl(symbol) {
     return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  },
+
+  parseYahooChart(data) {
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+    const meta = result.meta || {};
+    const closes = result.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
+    const price = meta.regularMarketPrice || closes[closes.length - 1];
+    if (!price) return null;
+    const prev = closes.length > 1 ? closes[closes.length - 2] : price;
+    const change =
+      meta.regularMarketChangePercent ??
+      (prev ? ((price - prev) / prev) * 100 : 0);
+    return { price: Number(price), change: Number(change), closes };
   },
 
   async fetchYahoo(key) {
     const sym = this.YAHOO[key];
     if (!sym) return null;
-    const targets = [
-      this.yahooChartUrl(sym),
-      "https://corsproxy.io/?" + encodeURIComponent(this.yahooChartUrl(sym)),
-      "https://api.allorigins.win/raw?url=" + encodeURIComponent(this.yahooChartUrl(sym)),
-    ];
-    for (const url of targets) {
-      try {
-        const data = await this.fetchJson(url);
-        const meta = data.chart?.result?.[0]?.meta || {};
-        const closes = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
-        const price = meta.regularMarketPrice || closes[closes.length - 1];
-        if (!price) continue;
-        const prev = closes.length > 1 ? closes[closes.length - 2] : price;
-        const change = meta.regularMarketChangePercent ?? (prev ? ((price - prev) / prev) * 100 : 0);
-        return {
-          price: Number(price),
-          change: Number(change),
-          unit: this.METALS.includes(key) ? "oz" : "unit",
-        };
-      } catch (e) { /* try next proxy */ }
+    try {
+      const data = await this.fetchWithProxies(this.yahooChartUrl(sym));
+      const parsed = this.parseYahooChart(data);
+      if (!parsed) return null;
+      return {
+        price: parsed.price,
+        change: parsed.change,
+        unit: this.METALS.includes(key) ? "oz" : "unit",
+      };
+    } catch (e) {
+      return null;
     }
-    return null;
+  },
+
+  async fetchYahooHistory(key, days = 30) {
+    const sym = this.YAHOO[key];
+    if (!sym) return [];
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=${days}d`;
+      const data = await this.fetchWithProxies(url);
+      const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
+      return closes.map(Number);
+    } catch (e) {
+      return [];
+    }
   },
 
   async fetchCrypto() {
-    const url =
+    const path =
       "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true";
-    const data = await this.fetchJson(url);
+    let data;
+    try {
+      data = await this.fetchWithProxies(path);
+    } catch (e) {
+      return {};
+    }
     const out = {};
-    if (data.bitcoin) out.bitcoin = { price: data.bitcoin.usd, change: data.bitcoin.usd_24h_change || 0 };
-    if (data.ethereum) out.ethereum = { price: data.ethereum.usd, change: data.ethereum.usd_24h_change || 0 };
+    if (data.bitcoin) {
+      out.bitcoin = { price: data.bitcoin.usd, change: data.bitcoin.usd_24h_change || 0, unit: "unit" };
+    }
+    if (data.ethereum) {
+      out.ethereum = { price: data.ethereum.usd, change: data.ethereum.usd_24h_change || 0, unit: "unit" };
+    }
     return out;
+  },
+
+  /** Clear primary + secondary price lines for UI */
+  priceDisplay(sym, asset, currency) {
+    const cur = currency || localStorage.getItem("lexora_currency") || "INR";
+    const usd = Number(asset?.price);
+    if (!Number.isFinite(usd)) return { primary: "—", secondary: "" };
+    if (sym === "usd_inr") {
+      return { primary: "₹" + usd.toFixed(2), secondary: "per USD" };
+    }
+    if (sym === "eur_usd" || sym === "gbp_usd") {
+      return { primary: usd.toFixed(4), secondary: "exchange rate" };
+    }
+    if (this.METALS.includes(sym)) {
+      const perGram = this.usdPerGram(usd);
+      const rate = cur === "USD" ? 1 : this.fxRates[cur] || this.usdInrRate;
+      const gramLocal = cur === "USD" ? perGram : perGram * rate;
+      return {
+        primary: this.formatAmount(gramLocal, cur) + " /g",
+        secondary: "$" + usd.toLocaleString("en-US", { maximumFractionDigits: 0 }) + " /oz",
+      };
+    }
+    const converted = cur === "USD" ? usd : this.convertFromUsd(usd, cur);
+    return {
+      primary: this.formatAmount(converted, cur),
+      secondary: cur !== "USD" ? "$" + usd.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "",
+    };
   },
 
   async fetchForex() {
@@ -232,19 +299,19 @@ const LexoraAPI = {
   },
 
   async history(sym, days = 30) {
-    const y = await this.fetchYahoo(sym);
-    if (y) {
-      try {
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(this.YAHOO[sym] || sym)}?interval=1d&range=${days}d`;
-        const data = await this.fetchJson(url);
-        const closes = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
-        if (closes.length > 2) return closes;
-      } catch (e) { /* */ }
-    }
+    const closes = await this.fetchYahooHistory(sym, days);
+    if (closes.length > 2) return closes;
     const base = this.FALLBACK[sym] || 100;
     const out = [base];
-    for (let i = 0; i < days; i++) out.push(out[out.length - 1] * (1 + (Math.random() - 0.5) * 0.02));
+    for (let i = 0; i < days; i++) out.push(out[out.length - 1] * (1 + (Math.random() - 0.5) * 0.015));
     return out;
+  },
+
+  /** % change series from first point (for live stream chart) */
+  normalizeSeries(prices) {
+    if (!prices?.length) return [];
+    const base = prices[0] || 1;
+    return prices.map((p) => ((p - base) / base) * 100);
   },
 
   async predict(symbol) {
