@@ -11,6 +11,7 @@ const LexoraApp = {
 
   init() {
     this.initCurrency();
+    if (typeof LexoraAPI !== "undefined") LexoraAPI.fetchFxRates().then(() => this.updateFxBadge());
     const ticker = document.getElementById("tickerContent");
     if (ticker && typeof LexoraAPI !== "undefined") {
       ticker.textContent = LexoraAPI.newsHeadlines().join("  ·  ");
@@ -245,69 +246,132 @@ const LexoraApp = {
   },
 
   initCurrency() {
-    const sel = document.getElementById("currencySelect");
-    if (sel) {
+    document.querySelectorAll("#currencySelect, #calcCurrencySelect").forEach((sel) => {
       sel.value = this.currency;
       sel.addEventListener("change", () => {
         this.currency = sel.value;
         localStorage.setItem("lexora_currency", this.currency);
+        document.querySelectorAll("#currencySelect, #calcCurrencySelect").forEach((s) => {
+          s.value = this.currency;
+        });
         this.applyMoneyLabels();
+        this.updateFxBadge();
         if (this.market) this.updateMarketCards(this.market);
         if (this.currentPage === "markets") this.renderMarketsTable();
       });
-    }
+    });
     this.applyMoneyLabels();
+    this.updateFxBadge();
+  },
+
+  updateFxBadge() {
+    const el = document.getElementById("fxRateBadge");
+    if (!el || typeof LexoraAPI === "undefined") return;
+    const r = LexoraAPI.fxRates[this.currency];
+    if (this.currency === "USD") el.textContent = "Base: USD";
+    else if (r) el.textContent = `1 USD = ${LexoraAPI.formatAmount(r, this.currency)}`;
+    else el.textContent = "";
   },
 
   moneySymbol() {
-    return this.currency === "INR" ? "₹" : "$";
+    return LexoraAPI?.CURRENCIES?.[this.currency]?.symbol || "₹";
   },
 
   applyMoneyLabels() {
     const sym = this.moneySymbol();
     document.querySelectorAll(".lbl-money").forEach((lbl) => {
       const base = lbl.dataset.base || lbl.textContent.split("(")[0].trim();
-      lbl.dataset.base = base;
+      if (!lbl.dataset.base) lbl.dataset.base = base;
       lbl.textContent = `${base} (${sym})`;
     });
   },
 
   formatPrice(sym, price) {
     if (typeof LexoraAPI !== "undefined" && LexoraAPI.formatPrice) {
-      return LexoraAPI.formatPrice(sym, price, this.currency, this.usdInrRate);
+      return LexoraAPI.formatPrice(sym, price, this.currency);
     }
-    return this.formatMoney(price, sym);
+    return this.formatCalcMoney(price);
   },
 
-  formatMoney(amount, sym) {
-    const n = Number(amount);
-    if (Number.isNaN(n)) return "—";
-    if (sym === "usd_inr") return "₹" + n.toFixed(2);
-    if (sym === "eur_usd" || sym === "gbp_usd") return n.toFixed(4);
-    if (this.currency === "INR") {
-      const inr = n * (this.usdInrRate || 83.25);
-      if (inr >= 100000) return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 0 });
-      return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  formatCalcMoney(amount) {
+    if (typeof LexoraAPI !== "undefined" && LexoraAPI.formatAmount) {
+      return LexoraAPI.formatAmount(amount, this.currency);
     }
-    if (n >= 10000) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-    return "$" + n.toFixed(2);
+    const n = Number(amount);
+    return this.moneySymbol() + (Number.isFinite(n) ? n.toLocaleString() : "—");
   },
 
   isLocalFlask() {
     return /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
   },
 
+  parseCalcBody(form) {
+    const type = form.dataset.type;
+    const body = { type };
+    new FormData(form).forEach((v, k) => {
+      const n = parseFloat(v);
+      body[k] = Number.isFinite(n) ? n : v;
+    });
+    return body;
+  },
+
+  hasCalcResult(r, type) {
+    if (!r || typeof r !== "object" || r.error) return false;
+    if (Object.keys(r).length === 0) return false;
+    const need = {
+      sip: ["future_value"],
+      gold: ["future_value"],
+      silver: ["future_value"],
+      crypto: ["profit"],
+      emi: ["emi"],
+      compound: ["maturity", "final_amount"],
+    }[type];
+    return need ? need.some((k) => r[k] != null && !Number.isNaN(Number(r[k]))) : false;
+  },
+
   normalizeCalcResult(type, r) {
-    if (!r || r.error) return null;
+    if (!this.hasCalcResult(r, type)) return null;
     if (type === "emi" && r.total_interest == null && r.interest != null) r.total_interest = r.interest;
     if (type === "compound") {
       if (r.maturity == null && r.final_amount != null) r.maturity = r.final_amount;
-      if (r.interest_earned == null && r.interest != null) r.interest_earned = r.interest;
     }
     return r;
   },
 
+  calcHintHtml() {
+    return '<p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p>';
+  },
+
+  renderCalcOutput(rows) {
+    return `<div class="calc-output">${rows
+      .map(
+        ([label, value]) =>
+          `<div class="calc-output-row"><span>${label}</span><strong class="calc-amount">${value}</strong></div>`
+      )
+      .join("")}</div>`;
+  },
+
+  resetCalculators() {
+    document.querySelectorAll(".calc-form").forEach((form) => {
+      form.reset();
+      const type = form.dataset.type;
+      const el = document.getElementById("result-" + type);
+      if (el) {
+        el.classList.remove("calc-error");
+        el.innerHTML = this.calcHintHtml();
+      }
+    });
+    document.querySelectorAll(".calc-tabs .tab").forEach((t, i) => {
+      t.classList.toggle("active", i === 0);
+    });
+    document.querySelectorAll(".calc-panel").forEach((p, i) => {
+      p.classList.toggle("active", i === 0);
+    });
+  },
+
   initCalculators() {
+    document.getElementById("btnCalcReset")?.addEventListener("click", () => this.resetCalculators());
+
     document.querySelectorAll(".calc-tabs .tab").forEach((tab) => {
       tab.addEventListener("click", () => {
         document.querySelectorAll(".calc-tabs .tab").forEach((t) => t.classList.remove("active"));
@@ -316,14 +380,18 @@ const LexoraApp = {
         document.getElementById("calc-" + tab.dataset.calc)?.classList.add("active");
       });
     });
+
     document.querySelectorAll(".calc-form").forEach((form) => {
+      if (form.dataset.bound === "1") return;
+      form.dataset.bound = "1";
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const type = form.dataset.type;
-        const fd = new FormData(form);
-        const body = { type };
-        fd.forEach((v, k) => (body[k] = parseFloat(v) || v));
-        let result;
+        const body = this.parseCalcBody(form);
+        const el = document.getElementById("result-" + type);
+        if (el) el.innerHTML = '<p class="calc-hint">Calculating…</p>';
+
+        let result = this.calcClient(type, body);
         if (this.isLocalFlask()) {
           try {
             const r = await fetch("/api/calculate", {
@@ -331,12 +399,18 @@ const LexoraApp = {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             });
-            if (r.ok) result = await r.json();
-          } catch (err) { /* client fallback */ }
+            if (r.ok) {
+              const api = await r.json();
+              if (this.hasCalcResult(api, type)) result = api;
+            }
+          } catch (err) { /* keep client result */ }
         }
-        if (!result || result.error) result = this.calcClient(type, body);
         this.displayCalcResult(type, this.normalizeCalcResult(type, result));
       });
+    });
+
+    document.querySelectorAll(".calc-result").forEach((el) => {
+      if (!el.innerHTML.trim()) el.innerHTML = this.calcHintHtml();
     });
   },
 
@@ -375,40 +449,56 @@ const LexoraApp = {
 
   displayCalcResult(type, r) {
     const el = document.getElementById("result-" + type);
-    if (!el || !r) {
-      if (el) el.textContent = "Could not calculate. Check your inputs.";
+    if (!el) return;
+    const fmt = (n) => this.formatCalcMoney(n);
+    el.classList.remove("calc-error");
+
+    if (!r) {
+      el.classList.add("calc-error");
+      el.innerHTML = '<p class="calc-hint">Could not calculate. Check your inputs.</p>';
       return;
     }
-    const fmt = (n) => this.formatMoney(n);
-    if (type === "sip" && r.future_value != null) {
-      el.innerHTML = `<p><strong>Future value:</strong> ${fmt(r.future_value)}</p>
-        <p><strong>Invested:</strong> ${fmt(r.invested)}</p>
-        <p><strong>Returns:</strong> ${fmt(r.returns)}</p>`;
+
+    if (type === "sip") {
+      el.innerHTML = this.renderCalcOutput([
+        ["Future value", fmt(r.future_value)],
+        ["Total invested", fmt(r.invested)],
+        ["Estimated returns", fmt(r.returns)],
+      ]);
       return;
     }
-    if ((type === "gold" || type === "silver") && r.future_value != null) {
-      el.innerHTML = `<p><strong>Current:</strong> ${fmt(r.current_value)}</p>
-        <p><strong>Future:</strong> ${fmt(r.future_value)}</p>
-        <p><strong>Profit:</strong> ${fmt(r.profit)}</p>`;
+    if (type === "gold" || type === "silver") {
+      el.innerHTML = this.renderCalcOutput([
+        ["Current value", fmt(r.current_value)],
+        ["Future value", fmt(r.future_value)],
+        ["Estimated profit", fmt(r.profit)],
+      ]);
       return;
     }
-    if (type === "crypto" && r.profit != null) {
-      el.innerHTML = `<p><strong>Profit/Loss:</strong> ${fmt(r.profit)}</p>
-        <p><strong>ROI:</strong> ${Number(r.roi).toFixed(2)}%</p>`;
+    if (type === "crypto") {
+      el.innerHTML = this.renderCalcOutput([
+        ["Profit / Loss", fmt(r.profit)],
+        ["Return (ROI)", `${Number(r.roi).toFixed(2)}%`],
+      ]);
       return;
     }
-    if (type === "emi" && r.emi != null) {
-      el.innerHTML = `<p><strong>Monthly EMI:</strong> ${fmt(r.emi)}</p>
-        <p><strong>Total payment:</strong> ${fmt(r.total_payment)}</p>
-        <p><strong>Total interest:</strong> ${fmt(r.total_interest)}</p>`;
+    if (type === "emi") {
+      el.innerHTML = this.renderCalcOutput([
+        ["Monthly EMI", fmt(r.emi)],
+        ["Total payment", fmt(r.total_payment)],
+        ["Total interest", fmt(r.total_interest)],
+      ]);
       return;
     }
-    if (type === "compound" && r.maturity != null) {
-      el.innerHTML = `<p><strong>Maturity:</strong> ${fmt(r.maturity)}</p>
-        <p><strong>Interest earned:</strong> ${fmt(r.interest_earned)}</p>`;
+    if (type === "compound") {
+      el.innerHTML = this.renderCalcOutput([
+        ["Maturity amount", fmt(r.maturity)],
+        ["Interest earned", fmt(r.interest_earned)],
+      ]);
       return;
     }
-    el.innerHTML = "<p>Could not calculate. Check your inputs.</p>";
+    el.classList.add("calc-error");
+    el.innerHTML = '<p class="calc-hint">Could not calculate. Check your inputs.</p>';
   },
 };
 

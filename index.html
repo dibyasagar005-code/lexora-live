@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LexorA — Luxury Exchange Of Real-time Assets</title>
-  <link rel="stylesheet" href="static/style.css">
+  <link rel="stylesheet" href="static/style.css?v=3">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -36,8 +36,13 @@
       <div class="currency-switch glass">
         <label for="currencySelect">Display currency</label>
         <select id="currencySelect" aria-label="Currency">
-          <option value="INR">INR (₹)</option>
-          <option value="USD">USD ($)</option>
+          <option value="INR">INR — ₹ Indian Rupee</option>
+          <option value="USD">USD — $ US Dollar</option>
+          <option value="EUR">EUR — € Euro</option>
+          <option value="GBP">GBP — £ British Pound</option>
+          <option value="JPY">JPY — ¥ Japanese Yen</option>
+          <option value="AUD">AUD — A$ Australian Dollar</option>
+          <option value="CAD">CAD — C$ Canadian Dollar</option>
         </select>
       </div>
       <div class="sidebar-footer">
@@ -136,8 +141,24 @@
       <div class="page-view" data-page="calculator">
         <section class="page-header">
           <h2>Investment Calculators</h2>
-          <p>SIP · Gold · Silver · Crypto · EMI · Compound Interest</p>
+          <p>SIP · Gold · Silver · Crypto · EMI · Compound — 7 live currencies</p>
         </section>
+        <div class="calc-toolbar glass">
+          <div class="currency-switch">
+            <label for="calcCurrencySelect">Calculator currency</label>
+            <select id="calcCurrencySelect" aria-label="Calculator currency">
+              <option value="INR">INR — ₹ Indian Rupee</option>
+              <option value="USD">USD — $ US Dollar</option>
+              <option value="EUR">EUR — € Euro</option>
+              <option value="GBP">GBP — £ British Pound</option>
+              <option value="JPY">JPY — ¥ Japanese Yen</option>
+              <option value="AUD">AUD — A$ Australian Dollar</option>
+              <option value="CAD">CAD — C$ Canadian Dollar</option>
+            </select>
+            <div class="fx-rate-badge" id="fxRateBadge">Loading live FX…</div>
+          </div>
+          <button type="button" class="btn btn-outline" id="btnCalcReset">Reset all</button>
+        </div>
         <div class="calc-tabs">
           <button type="button" class="tab active" data-calc="sip">SIP</button>
           <button type="button" class="tab" data-calc="gold">Gold</button>
@@ -153,9 +174,9 @@
               <div class="form-group"><label class="lbl-money">Monthly Investment</label><input type="number" name="monthly" value="5000" step="100"></div>
               <div class="form-group"><label>Expected Return (% p.a.)</label><input type="number" name="rate" value="12" step="0.1"></div>
               <div class="form-group"><label>Duration (years)</label><input type="number" name="years" value="10" min="1"></div>
-              <button type="submit" class="btn btn-primary">Calculate</button>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
             </form>
-            <div class="calc-result" id="result-sip">Enter values and calculate</div>
+            <div class="calc-result" id="result-sip"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
           </div>
           <div class="calc-panel glass" id="calc-gold">
             <h4>Gold Investment Calculator</h4>
@@ -164,7 +185,7 @@
               <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="6500" step="0.01"></div>
               <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
               <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="8" step="0.1"></div>
-              <button type="submit" class="btn btn-primary">Calculate</button>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
             </form>
             <div class="calc-result" id="result-gold">Enter values and calculate</div>
           </div>
@@ -175,7 +196,7 @@
               <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="85" step="0.01"></div>
               <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
               <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="6" step="0.1"></div>
-              <button type="submit" class="btn btn-primary">Calculate</button>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
             </form>
             <div class="calc-result" id="result-silver">Enter values and calculate</div>
           </div>
@@ -185,7 +206,7 @@
               <div class="form-group"><label class="lbl-money">Buy Price</label><input type="number" name="buy_price" value="50000"></div>
               <div class="form-group"><label class="lbl-money">Sell Price</label><input type="number" name="sell_price" value="65000"></div>
               <div class="form-group"><label>Quantity</label><input type="number" name="quantity" value="1" step="0.0001"></div>
-              <button type="submit" class="btn btn-primary">Calculate</button>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
             </form>
             <div class="calc-result" id="result-crypto">Enter values and calculate</div>
           </div>
@@ -195,7 +216,7 @@
               <div class="form-group"><label class="lbl-money">Loan Amount</label><input type="number" name="principal" value="1000000"></div>
               <div class="form-group"><label>Interest Rate (% p.a.)</label><input type="number" name="rate" value="8.5" step="0.1"></div>
               <div class="form-group"><label>Tenure (months)</label><input type="number" name="tenure" value="240" min="1"></div>
-              <button type="submit" class="btn btn-primary">Calculate</button>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
             </form>
             <div class="calc-result" id="result-emi">Enter values and calculate</div>
           </div>
@@ -206,7 +227,7 @@
               <div class="form-group"><label>Rate (% p.a.)</label><input type="number" name="rate" value="10" step="0.1"></div>
               <div class="form-group"><label>Years</label><input type="number" name="years" value="10" min="1"></div>
               <div class="form-group"><label>Compounding per year</label><input type="number" name="frequency" value="4" min="1"></div>
-              <button type="submit" class="btn btn-primary">Calculate</button>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
             </form>
             <div class="calc-result" id="result-compound">Enter values and calculate</div>
           </div>
@@ -215,8 +236,8 @@
     </main>
   </div>
 
-  <script src="static/api.js"></script>
-  <script src="static/charts.js"></script>
-  <script src="static/app.js"></script>
+  <script src="static/api.js?v=3"></script>
+  <script src="static/charts.js?v=3"></script>
+  <script src="static/app.js?v=3"></script>
 </body>
 </html>

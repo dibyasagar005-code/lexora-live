@@ -4,6 +4,16 @@
  */
 const LexoraAPI = {
   usdInrRate: 83.25,
+  fxRates: { USD: 1, INR: 83.25, EUR: 0.92, GBP: 0.79, JPY: 150, AUD: 1.52, CAD: 1.36 },
+  CURRENCIES: {
+    USD: { symbol: "$", locale: "en-US", name: "US Dollar" },
+    INR: { symbol: "₹", locale: "en-IN", name: "Indian Rupee" },
+    EUR: { symbol: "€", locale: "de-DE", name: "Euro" },
+    GBP: { symbol: "£", locale: "en-GB", name: "British Pound" },
+    JPY: { symbol: "¥", locale: "ja-JP", name: "Japanese Yen" },
+    AUD: { symbol: "A$", locale: "en-AU", name: "Australian Dollar" },
+    CAD: { symbol: "C$", locale: "en-CA", name: "Canadian Dollar" },
+  },
   TIMEOUT: 12000,
   FALLBACK: {
     gold: 2650, silver: 31.5, bitcoin: 67500, ethereum: 3500, platinum: 980,
@@ -18,6 +28,26 @@ const LexoraAPI = {
 
   isLocalFlask() {
     return location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  },
+
+  /** Live FX from Frankfurter (USD base) — 7 currencies */
+  async fetchFxRates() {
+    try {
+      const data = await this.fetchJson(
+        "https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP,JPY,AUD,CAD"
+      );
+      const rates = data.rates || {};
+      this.fxRates = { USD: 1, ...rates };
+      if (rates.INR) this.usdInrRate = rates.INR;
+      return this.fxRates;
+    } catch (e) {
+      return this.fxRates;
+    }
+  },
+
+  convertFromUsd(amountUsd, toCurrency) {
+    const rate = this.fxRates[toCurrency] || 1;
+    return Number(amountUsd) * rate;
   },
 
   async fetchJson(url) {
@@ -102,6 +132,7 @@ const LexoraAPI = {
       this.fetchMetals(),
       this.fetchCrypto(),
       this.fetchForex(),
+      this.fetchFxRates(),
     ]);
 
     const m = metals.status === "fulfilled" ? metals.value : {};
@@ -134,19 +165,23 @@ const LexoraAPI = {
     return { timestamp: new Date().toISOString(), source, assets };
   },
 
-  formatPrice(sym, price, currency, usdInr) {
+  formatPrice(sym, price, currency) {
     const cur = currency || localStorage.getItem("lexora_currency") || "INR";
-    const rate = usdInr || this.usdInrRate || 83.25;
     const n = Number(price);
     if (sym === "usd_inr") return "₹" + n.toFixed(2);
     if (sym === "eur_usd" || sym === "gbp_usd") return n.toFixed(4);
-    if (cur === "INR") {
-      const inr = n * rate;
-      if (inr >= 100000) return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 0 });
-      return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 2 });
-    }
-    if (n >= 10000) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-    return "$" + n.toFixed(2);
+    const converted = cur === "USD" ? n : this.convertFromUsd(n, cur);
+    return this.formatAmount(converted, cur);
+  },
+
+  formatAmount(amount, currency) {
+    const cur = currency || "INR";
+    const meta = this.CURRENCIES[cur] || this.CURRENCIES.INR;
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return "—";
+    const max = cur === "JPY" ? 0 : 2;
+    const formatted = n.toLocaleString(meta.locale, { maximumFractionDigits: max });
+    return meta.symbol + formatted;
   },
 
   label(sym) {

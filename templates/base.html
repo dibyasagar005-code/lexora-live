@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}LexorA — Luxury Exchange Of Real-time Assets{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     {% block head %}{% endblock %}
 </head>
@@ -28,8 +28,13 @@
             <div class="currency-switch glass">
                 <label for="currencySelect">Display currency</label>
                 <select id="currencySelect" aria-label="Currency">
-                    <option value="INR">INR (₹)</option>
-                    <option value="USD">USD ($)</option>
+                    <option value="INR">INR — ₹ Indian Rupee</option>
+                    <option value="USD">USD — $ US Dollar</option>
+                    <option value="EUR">EUR — € Euro</option>
+                    <option value="GBP">GBP — £ British Pound</option>
+                    <option value="JPY">JPY — ¥ Japanese Yen</option>
+                    <option value="AUD">AUD — A$ Australian Dollar</option>
+                    <option value="CAD">CAD — C$ Canadian Dollar</option>
                 </select>
             </div>
             <div class="live-status">
@@ -89,11 +94,12 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='api.js') }}"></script>
-    <script src="{{ url_for('static', filename='charts.js') }}"></script>
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='api.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='charts.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=3"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
+        if (typeof LexoraAPI !== "undefined") LexoraAPI.fetchFxRates();
         if (window.LexoraApp && LexoraApp.initCurrency) LexoraApp.initCurrency();
       });
     </script>
