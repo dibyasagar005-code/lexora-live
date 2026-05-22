@@ -21,7 +21,7 @@ const LexoraAPI = {
   METAL_LB: ["copper"],
   /** Reject bad API values (e.g. copper $/lb mistaken as gold $/oz) */
   PRICE_RANGES: {
-    gold: [1500, 6500], silver: [12, 120], platinum: [700, 3500], palladium: [800, 6000],
+    gold: [2000, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000],
     copper: [2, 15], bitcoin: [10000, 250000], ethereum: [500, 25000],
     crude_oil: [35, 200], sp500: [3000, 9000], nasdaq: [10000, 35000],
     usd_inr: [70, 110], eur_usd: [0.85, 1.25], gbp_usd: [1.0, 1.45],
@@ -48,6 +48,24 @@ const LexoraAPI = {
     palladium: ["PA=F", "XPDUSD=X"],
   },
   _lastPrices: {},
+  _sessionBase: null,
+
+  loadSessionBase() {
+    try {
+      const raw = sessionStorage.getItem("lexora_price_base");
+      if (raw) this._sessionBase = JSON.parse(raw);
+    } catch (e) {
+      this._sessionBase = null;
+    }
+  },
+
+  saveSessionBase() {
+    try {
+      sessionStorage.setItem("lexora_price_base", JSON.stringify(this._sessionBase || {}));
+    } catch (e) {
+      /* */
+    }
+  },
 
   withTimeout(promise, ms = this.FETCH_TIMEOUT) {
     return Promise.race([
@@ -64,19 +82,26 @@ const LexoraAPI = {
     return location.hostname === "127.0.0.1" || location.hostname === "localhost";
   },
 
-  /** Live FX from Frankfurter (USD base) — 7 currencies */
+  /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
   async fetchFxRates() {
-    try {
-      const data = await this.fetchJson(
-        "https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP,JPY,AUD,CAD"
-      );
-      const rates = data.rates || {};
-      this.fxRates = { USD: 1, ...rates };
-      if (rates.INR) this.usdInrRate = rates.INR;
-      return this.fxRates;
-    } catch (e) {
-      return this.fxRates;
+    const urls = [
+      "https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP,JPY,AUD,CAD",
+      "https://open.er-api.com/v6/latest/USD",
+    ];
+    for (const url of urls) {
+      try {
+        const data = await this.fetchJson(this.cacheBust(url));
+        const rates = data.rates || {};
+        if (Object.keys(rates).length) {
+          this.fxRates = { USD: 1, ...rates };
+          if (rates.INR) this.usdInrRate = Number(rates.INR);
+          return this.fxRates;
+        }
+      } catch (e) {
+        /* next */
+      }
     }
+    return this.fxRates;
   },
 
   convertFromUsd(amountUsd, toCurrency) {
@@ -110,11 +135,28 @@ const LexoraAPI = {
   },
 
   resolveChange(key, price, apiChange) {
-    const prev = this._lastPrices[key];
-    let change = Number(apiChange) || 0;
-    if (prev && prev > 0 && Math.abs(change) < 0.02) {
-      change = ((price - prev) / prev) * 100;
+    if (!this._sessionBase) this.loadSessionBase();
+    if (!this._sessionBase) this._sessionBase = {};
+
+    let change = Number(apiChange);
+    if (Number.isFinite(change) && Math.abs(change) >= 0.01) {
+      this._lastPrices[key] = price;
+      this._sessionBase[key] = price;
+      this.saveSessionBase();
+      return Math.round(change * 100) / 100;
     }
+
+    const prev = this._lastPrices[key];
+    if (prev && prev > 0 && Math.abs(price - prev) > 0.0001) {
+      change = ((price - prev) / prev) * 100;
+    } else if (this._sessionBase[key] && this._sessionBase[key] > 0) {
+      change = ((price - this._sessionBase[key]) / this._sessionBase[key]) * 100;
+    } else {
+      change = 0;
+      this._sessionBase[key] = price;
+      this.saveSessionBase();
+    }
+
     this._lastPrices[key] = price;
     return Math.round(change * 100) / 100;
   },
@@ -415,6 +457,26 @@ const LexoraAPI = {
       };
     }
     if (this.METALS.includes(sym)) {
+      if (cur === "INR" && sym === "gold" && asset?.inrPerGram24k) {
+        const g = Number(asset.inrPerGram24k);
+        return {
+          primary:
+            "₹" +
+            g.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+            " /g · 24K",
+          secondary: `${this.formatUsdSpot(usd)} /oz · IBJA India`,
+        };
+      }
+      if (cur === "INR" && sym === "silver" && asset?.inrPerGram999) {
+        const g = Number(asset.inrPerGram999);
+        return {
+          primary:
+            "₹" +
+            g.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+            " /g · 999",
+          secondary: `${this.formatUsdSpot(usd)} /oz · IBJA India`,
+        };
+      }
       const perGram = this.usdPerGram(usd);
       const rate = cur === "USD" ? 1 : this.fxRates[cur] || this.usdInrRate;
       const gramLocal = cur === "USD" ? perGram : perGram * rate;
@@ -431,19 +493,104 @@ const LexoraAPI = {
   },
 
   async fetchForex() {
-    try {
-      const data = await this.fetchJson(
-        this.cacheBust("https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP")
-      );
-      const r = data.rates || {};
-      return {
-        usd_inr: r.INR,
-        eur_usd: r.EUR ? 1 / r.EUR : null,
-        gbp_usd: r.GBP ? 1 / r.GBP : null,
-      };
-    } catch (e) {
-      return {};
+    const urls = [
+      "https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP",
+      "https://open.er-api.com/v6/latest/USD",
+    ];
+    for (const url of urls) {
+      try {
+        const data = await this.fetchJson(this.cacheBust(url));
+        const r = data.rates || {};
+        if (r.INR) {
+          return {
+            usd_inr: Number(r.INR),
+            eur_usd: r.EUR ? 1 / Number(r.EUR) : null,
+            gbp_usd: r.GBP ? 1 / Number(r.GBP) : null,
+            source: "live-fx",
+          };
+        }
+      } catch (e) {
+        /* */
+      }
     }
+    return {};
+  },
+
+  /** IBJA India — same benchmark family used by PhonePe / Indian jewellers (24K per 10g) */
+  async fetchIBJAIndia() {
+    const out = {};
+    try {
+      const [gold, silver] = await Promise.all([
+        this.fetchJson(this.cacheBust("https://ibja-api.vercel.app/latest")),
+        this.fetchJson(this.cacheBust("https://ibja-api.vercel.app/silver/latest")),
+      ]);
+
+      const g10 = Number(gold?.lblGold999_AM || gold?.lblGold999_PM);
+      if (g10 > 50000) {
+        const inrPerGram24k = g10 / 10;
+        const am = Number(gold.lblGold999_AM) / 10;
+        const pm = Number(gold.lblGold999_PM) / 10;
+        let change = 0;
+        if (am > 0 && pm > 0) change = ((pm - am) / am) * 100;
+        const usdOz = (inrPerGram24k / this.usdInrRate) * this.TROY_OZ_GRAMS;
+        if (this.isValidPrice("gold", usdOz)) {
+          out.gold = {
+            price: usdOz,
+            change,
+            unit: "oz",
+            source: "IBJA India",
+            inrPerGram24k,
+            purity: "24K 999",
+          };
+        }
+      }
+
+      const silKg = Number(silver?.lblSilver999_AM || silver?.lblSilver999_PM);
+      if (silKg > 50000) {
+        const inrPerGram = silKg / 1000;
+        const am = Number(silver.lblSilver999_AM) / 1000;
+        const pm = Number(silver.lblSilver999_PM) / 1000;
+        let change = 0;
+        if (am > 0 && pm > 0) change = ((pm - am) / am) * 100;
+        const usdOz = (inrPerGram / this.usdInrRate) * this.TROY_OZ_GRAMS;
+        if (this.isValidPrice("silver", usdOz)) {
+          out.silver = {
+            price: usdOz,
+            change,
+            unit: "oz",
+            source: "IBJA India",
+            inrPerGram999: inrPerGram,
+            purity: "999",
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("[LexorA] IBJA:", e.message);
+    }
+    return out;
+  },
+
+  /** Minted Metal — CORS open LBMA spot + daily change */
+  async fetchMintedMetal() {
+    const out = {};
+    try {
+      const data = await this.fetchJson(this.cacheBust("https://mintedmetal.com/api/prices.json"));
+      const keys = ["gold", "silver", "platinum", "palladium"];
+      keys.forEach((key) => {
+        const m = data?.metals?.[key];
+        if (!m) return;
+        const price = Number(m.price);
+        const prev = Number(m.previousPrice);
+        let change = 0;
+        if (prev > 0) change = ((price - prev) / prev) * 100;
+        if (this.isValidPrice(key, price)) {
+          out[key] = { price, change, unit: "oz", source: "mintedmetal.com" };
+        }
+      });
+    } catch (e) {
+      console.warn("[LexorA] mintedmetal:", e.message);
+    }
+    return out;
   },
 
   usdPerGram(usdPerOz) {
@@ -468,6 +615,23 @@ const LexoraAPI = {
       updated: Date.now(),
       live: isLive,
       apiSource: y.source || (isLive ? "live" : "offline-estimate"),
+      inrPerGram24k: y.inrPerGram24k,
+      inrPerGram999: y.inrPerGram999,
+      purity: y.purity,
+    };
+  },
+
+  mergeMetalQuote(base, extra) {
+    if (!extra) return base;
+    if (!base) return extra;
+    return {
+      price: extra.price || base.price,
+      change: Math.abs(Number(extra.change) || 0) >= 0.01 ? extra.change : base.change,
+      unit: "oz",
+      source: [base.source, extra.source].filter(Boolean).join(" + "),
+      inrPerGram24k: extra.inrPerGram24k || base.inrPerGram24k,
+      inrPerGram999: extra.inrPerGram999 || base.inrPerGram999,
+      purity: extra.purity || base.purity,
     };
   },
 
@@ -493,27 +657,33 @@ const LexoraAPI = {
       timestamp: new Date().toISOString(),
       source,
       assets,
-      refreshSec: 8,
+      refreshSec: 30,
       liveCount,
       total,
     };
   },
 
-  /** Fast lane: gold-api + Binance + Frankfurter (under ~6s) */
+  /** Fast lane: IBJA India + Minted Metal + Binance + FX (CORS-safe) */
   async fetchMarketFastLane() {
-    const [goldR, silverR, cryptoR, forexR, fxR] = await Promise.allSettled([
-      this.withTimeout(this.fetchGoldApiSpot(), this.FETCH_TIMEOUT),
-      this.withTimeout(this.fetchGoldApiMetal("XAG", "silver"), this.FETCH_TIMEOUT),
+    await this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT).catch(() => {});
+
+    const [ibjaR, mintedR, cryptoR, forexR] = await Promise.allSettled([
+      this.withTimeout(this.fetchIBJAIndia(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchMintedMetal(), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchCryptoBinance(), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchForex(), this.FETCH_TIMEOUT),
-      this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT),
     ]);
+
+    const ibja = this.unwrapSettled(ibjaR) || {};
+    const minted = this.unwrapSettled(mintedR) || {};
+
     return {
-      gold: this.unwrapSettled(goldR),
-      silver: this.unwrapSettled(silverR),
+      gold: this.mergeMetalQuote(ibja.gold, minted.gold),
+      silver: this.mergeMetalQuote(ibja.silver, minted.silver),
+      platinum: minted.platinum,
+      palladium: minted.palladium,
       crypto: this.unwrapSettled(cryptoR) || {},
       forex: this.unwrapSettled(forexR) || {},
-      fxOk: fxR.status === "fulfilled",
     };
   },
 
@@ -562,6 +732,8 @@ const LexoraAPI = {
 
     if (fast.gold) this.putMarketAsset(assets, "gold", fast.gold, true);
     if (fast.silver) this.putMarketAsset(assets, "silver", fast.silver, true);
+    if (fast.platinum) this.putMarketAsset(assets, "platinum", fast.platinum, true);
+    if (fast.palladium) this.putMarketAsset(assets, "palladium", fast.palladium, true);
     Object.entries(fast.crypto).forEach(([k, v]) => this.putMarketAsset(assets, k, v, true));
     if (fast.forex.usd_inr) {
       this.putMarketAsset(
@@ -626,6 +798,12 @@ const LexoraAPI = {
     const cur = currency || "INR";
     const usd = Number(a.price);
     if (this.METALS.includes(sym)) {
+      if (cur === "INR" && sym === "gold" && a.inrPerGram24k) {
+        return Math.round(Number(a.inrPerGram24k) * 100) / 100;
+      }
+      if (cur === "INR" && sym === "silver" && a.inrPerGram999) {
+        return Math.round(Number(a.inrPerGram999) * 100) / 100;
+      }
       const perGramUsd = this.usdPerGram(usd);
       if (cur === "USD") return Math.round(perGramUsd * 100) / 100;
       const rate = this.fxRates[cur] || this.usdInrRate;

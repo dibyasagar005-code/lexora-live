@@ -430,6 +430,9 @@ body.menu-open { overflow: hidden; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
 .form-group input, .form-group select { width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+.card-change.neutral {
+  color: var(--text-muted);
+}
 .card-change { font-size: 13px; margin: 8px 0; }
 .card-change.positive { color: var(--positive); }
 .card-change.negative { color: var(--negative); }

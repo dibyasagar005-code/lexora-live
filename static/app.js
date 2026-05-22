@@ -2,7 +2,7 @@
  * LexorA AI Market Predictor — works on localhost Flask AND GitHub Pages.
  */
 const LexoraApp = {
-  refreshInterval: 8000,
+  refreshInterval: 30000,
   activePrediction: "gold",
   lastMarketFetch: Date.now(),
   refreshLabelTimer: null,
@@ -151,7 +151,7 @@ const LexoraApp = {
         this.market.liveCount ??
         Object.values(this.market.assets || {}).filter((a) => a.live).length;
       const total = Object.keys(this.market.assets || {}).length;
-      if (src) src.textContent = `${this.market.source.toUpperCase()} · ${liveN} live · 8s`;
+      if (src) src.textContent = `${this.market.source.toUpperCase()} · ${liveN} live · 30s`;
       if (pulse) {
         pulse.textContent =
           this.market.source === "live"
@@ -191,7 +191,7 @@ const LexoraApp = {
     if (c && this.market?.assets) {
       const n = Object.keys(this.market.assets).length;
       const live = Object.values(this.market.assets).filter((a) => a.live).length;
-      c.textContent = `${n} assets · ${live} live · 8s refresh`;
+      c.textContent = `${n} assets · ${live} live · 30s refresh`;
     }
   },
 
@@ -223,9 +223,11 @@ const LexoraApp = {
         }
         if (subEl) subEl.textContent = display.secondary || "";
         if (changeEl) {
-          const ch = asset.change || 0;
-          changeEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "% live";
-          changeEl.className = "card-change " + (ch >= 0 ? "positive" : "negative");
+          const ch = Number(asset.change) || 0;
+          const arrow = ch > 0 ? "▲" : ch < 0 ? "▼" : "●";
+          const label = asset.live !== false ? "live" : "est.";
+          changeEl.textContent = `${arrow} ${ch >= 0 ? "+" : ""}${ch.toFixed(2)}% ${label}`;
+          changeEl.className = "card-change " + (ch > 0 ? "positive" : ch < 0 ? "negative" : "neutral");
         }
         const spotEl = card.querySelector(".card-spot");
         if (spotEl) {
@@ -257,10 +259,8 @@ const LexoraApp = {
         this.loadPrediction(a.dataset.gotoPred);
       });
     });
-    const stub = LexoraAPI.finalizeMarket({});
-    this.updateMarketCards(stub);
     const c = document.getElementById("assetCount");
-    if (c) c.textContent = `${Object.keys(stub.assets).length} assets · loading live…`;
+    if (c) c.textContent = "Loading live India & world rates…";
   },
 
   renderMarketsTable() {

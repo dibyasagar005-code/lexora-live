@@ -107,6 +107,75 @@ def fetch_yahoo_asset(key):
     return None
 
 
+def fetch_ibja_india():
+    """IBJA benchmark — Indian gold/silver (PhonePe-style INR rates)."""
+    out = {}
+    gold = _safe_request("https://ibja-api.vercel.app/latest")
+    silver = _safe_request("https://ibja-api.vercel.app/silver/latest")
+    inr = FALLBACK_PRICES.get("usd_inr", 83.5)
+    fx = _safe_request("https://open.er-api.com/v6/latest/USD")
+    if fx and fx.get("rates", {}).get("INR"):
+        inr = float(fx["rates"]["INR"])
+    if gold:
+        g10 = float(gold.get("lblGold999_AM") or gold.get("lblGold999_PM") or 0)
+        if g10 > 50000:
+            inr_g = g10 / 10
+            usd_oz = (inr_g / inr) * TROY_OZ_GRAMS
+            if _valid_price("gold", usd_oz):
+                am = float(gold.get("lblGold999_AM") or 0) / 10
+                pm = float(gold.get("lblGold999_PM") or 0) / 10
+                chg = ((pm - am) / am) * 100 if am and pm else 0
+                out["gold"] = {
+                    "price": usd_oz,
+                    "change": round(chg, 2),
+                    "symbol": "GOLD",
+                    "unit": "oz",
+                    "live": True,
+                    "apiSource": "IBJA India",
+                    "inrPerGram24k": inr_g,
+                }
+    if silver:
+        sk = float(silver.get("lblSilver999_AM") or silver.get("lblSilver999_PM") or 0)
+        if sk > 50000:
+            inr_s = sk / 1000
+            usd_oz = (inr_s / inr) * TROY_OZ_GRAMS
+            if _valid_price("silver", usd_oz):
+                out["silver"] = {
+                    "price": usd_oz,
+                    "change": 0,
+                    "symbol": "SILVER",
+                    "unit": "oz",
+                    "live": True,
+                    "apiSource": "IBJA India",
+                    "inrPerGram999": inr_s,
+                }
+    return out
+
+
+def fetch_minted_metal():
+    out = {}
+    data = _safe_request("https://mintedmetal.com/api/prices.json")
+    if not data or "metals" not in data:
+        return out
+    for key in ("gold", "silver", "platinum", "palladium"):
+        m = data["metals"].get(key)
+        if not m:
+            continue
+        price = float(m.get("price", 0))
+        prev = float(m.get("previousPrice", 0))
+        chg = ((price - prev) / prev) * 100 if prev else 0
+        if _valid_price(key, price):
+            out[key] = {
+                "price": price,
+                "change": round(chg, 2),
+                "symbol": key.upper(),
+                "unit": "oz",
+                "live": True,
+                "apiSource": "mintedmetal.com",
+            }
+    return out
+
+
 def fetch_goldprice_org():
     """Global gold/silver spot (USD per troy oz)."""
     out = {}
@@ -153,7 +222,15 @@ def fetch_gold_api_spot(metal="XAU", key="gold"):
 
 
 def fetch_yahoo_assets():
-    data = fetch_goldprice_org()
+    data = fetch_ibja_india()
+    for key, row in fetch_minted_metal().items():
+        if key not in data or not data[key].get("live"):
+            data[key] = row
+        elif key in ("gold", "silver") and row.get("change"):
+            data[key]["change"] = row["change"]
+            data[key]["price"] = row.get("price") or data[key]["price"]
+    if not data.get("gold"):
+        data.update(fetch_goldprice_org())
     for key in YAHOO_TICKERS:
         if key in data and _valid_price(key, data[key]["price"]):
             continue
