@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}LexorA — Luxury Exchange Of Real-time Assets{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     {% block head %}{% endblock %}
 </head>
@@ -15,12 +15,13 @@
         <div class="ticker-content" id="tickerContent">Loading market news...</div>
     </div>
 
+    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
     <div class="app-layout">
-        <!-- Sidebar navigation -->
         <aside class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
             <div class="sidebar-brand">
-                <div class="logo-icon">◈</div>
-                <div>
+                <div class="logo-icon" aria-hidden="true">◈</div>
+                <div class="brand-text">
                     <h1>LexorA</h1>
                     <span class="tagline">Luxury Exchange Of Real-time Assets</span>
                 </div>
@@ -80,7 +81,7 @@
 
         <!-- Main content -->
         <main class="main-content">
-            <button class="mobile-menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+            <button type="button" class="mobile-menu-btn" id="menuBtn" aria-label="Open menu">☰ Menu</button>
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="flash-messages">
@@ -94,13 +95,17 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='api.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='charts.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='app.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='api.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='charts.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='app.js') }}?v=4"></script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         if (typeof LexoraAPI !== "undefined") LexoraAPI.fetchFxRates();
-        if (window.LexoraApp && LexoraApp.initCurrency) LexoraApp.initCurrency();
+        if (window.LexoraApp) {
+          if (LexoraApp.initCurrency) LexoraApp.initCurrency();
+          if (LexoraApp.initMobileMenu) LexoraApp.initMobileMenu();
+          if (LexoraApp.refreshMarketData) LexoraApp.refreshMarketData();
+        }
       });
     </script>
     {% block scripts %}{% endblock %}

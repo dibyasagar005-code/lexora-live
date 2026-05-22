@@ -14,10 +14,12 @@ const LexoraAPI = {
     AUD: { symbol: "A$", locale: "en-AU", name: "Australian Dollar" },
     CAD: { symbol: "C$", locale: "en-CA", name: "Canadian Dollar" },
   },
-  TIMEOUT: 12000,
+  TIMEOUT: 14000,
+  TROY_OZ_GRAMS: 31.1034768,
+  METALS: ["gold", "silver", "platinum"],
   FALLBACK: {
-    gold: 2650, silver: 31.5, bitcoin: 67500, ethereum: 3500, platinum: 980,
-    crude_oil: 78.5, usd_inr: 83.25, sp500: 5200, nasdaq: 16500, eur_usd: 1.08, gbp_usd: 1.27,
+    gold: 3340, silver: 31.2, bitcoin: 97000, ethereum: 3600, platinum: 1020,
+    crude_oil: 72, usd_inr: 83.5, sp500: 5900, nasdaq: 19500, eur_usd: 1.08, gbp_usd: 1.27,
   },
   LABELS: {
     gold: "Gold", silver: "Silver", bitcoin: "Bitcoin", ethereum: "Ethereum",
@@ -62,24 +64,35 @@ const LexoraAPI = {
     }
   },
 
-  async fetchMetals() {
-    const urls = [
-      "https://api.metals.live/v1/spot",
-      "https://corsproxy.io/?" + encodeURIComponent("https://api.metals.live/v1/spot"),
+  yahooChartUrl(symbol) {
+    return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  },
+
+  async fetchYahoo(key) {
+    const sym = this.YAHOO[key];
+    if (!sym) return null;
+    const targets = [
+      this.yahooChartUrl(sym),
+      "https://corsproxy.io/?" + encodeURIComponent(this.yahooChartUrl(sym)),
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(this.yahooChartUrl(sym)),
     ];
-    for (const url of urls) {
+    for (const url of targets) {
       try {
         const data = await this.fetchJson(url);
-        const out = {};
-        (Array.isArray(data) ? data : []).forEach((row) => {
-          const m = (row.metal || "").toLowerCase();
-          if (m === "gold" || row.gold != null) out.gold = parseFloat(row.price ?? row.gold);
-          if (m === "silver" || row.silver != null) out.silver = parseFloat(row.price ?? row.silver);
-        });
-        if (out.gold || out.silver) return out;
-      } catch (e) { /* next */ }
+        const meta = data.chart?.result?.[0]?.meta || {};
+        const closes = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
+        const price = meta.regularMarketPrice || closes[closes.length - 1];
+        if (!price) continue;
+        const prev = closes.length > 1 ? closes[closes.length - 2] : price;
+        const change = meta.regularMarketChangePercent ?? (prev ? ((price - prev) / prev) * 100 : 0);
+        return {
+          price: Number(price),
+          change: Number(change),
+          unit: this.METALS.includes(key) ? "oz" : "unit",
+        };
+      } catch (e) { /* try next proxy */ }
     }
-    return {};
+    return null;
   },
 
   async fetchCrypto() {
@@ -102,76 +115,96 @@ const LexoraAPI = {
     };
   },
 
-  async fetchYahoo(key) {
-    const sym = this.YAHOO[key];
-    if (!sym) return null;
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
-      const data = await this.fetchJson(url);
-      const closes = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
-      if (!closes.length) return null;
-      const price = closes[closes.length - 1];
-      const prev = closes.length > 1 ? closes[closes.length - 2] : price;
-      return { price, change: prev ? ((price - prev) / prev) * 100 : 0 };
-    } catch (e) {
-      return null;
-    }
+  usdPerGram(usdPerOz) {
+    return Number(usdPerOz) / this.TROY_OZ_GRAMS;
   },
 
-  /** Main market fetch — mirrors Python fetch_market_data() */
+  /** Main market fetch — Yahoo + CoinGecko + Frankfurter */
   async fetchMarket() {
     if (this.isLocalFlask()) {
       try {
         const r = await fetch("/api/market");
         if (r.ok) return await r.json();
-      } catch (e) { /* fallback to client */ }
+      } catch (e) { /* client fallback */ }
     }
 
     const assets = {};
-    const [metals, crypto, forex] = await Promise.allSettled([
-      this.fetchMetals(),
-      this.fetchCrypto(),
-      this.fetchForex(),
+    const yahooKeys = Object.keys(this.YAHOO);
+    const [yahooResults, crypto, forex] = await Promise.all([
+      Promise.all(yahooKeys.map(async (key) => [key, await this.fetchYahoo(key)])),
+      this.fetchCrypto().catch(() => ({})),
+      this.fetchForex().catch(() => ({})),
       this.fetchFxRates(),
     ]);
 
-    const m = metals.status === "fulfilled" ? metals.value : {};
-    const c = crypto.status === "fulfilled" ? crypto.value : {};
-    const f = forex.status === "fulfilled" ? forex.value : {};
-
-    if (m.gold) assets.gold = { price: m.gold, change: 0, symbol: "XAU" };
-    if (m.silver) assets.silver = { price: m.silver, change: 0, symbol: "XAG" };
-    Object.entries(c).forEach(([k, v]) => {
-      assets[k] = { price: v.price, change: v.change, symbol: k.toUpperCase().slice(0, 3) };
-    });
-    if (f.usd_inr) assets.usd_inr = { price: f.usd_inr, change: 0, symbol: "USD/INR" };
-    if (f.eur_usd) assets.eur_usd = { price: f.eur_usd, change: 0, symbol: "EUR/USD" };
-    if (f.gbp_usd) assets.gbp_usd = { price: f.gbp_usd, change: 0, symbol: "GBP/USD" };
-
-    for (const key of ["sp500", "nasdaq", "crude_oil", "platinum"]) {
-      const y = await this.fetchYahoo(key);
-      if (y) assets[key] = { price: y.price, change: y.change, symbol: key.toUpperCase() };
-    }
-
-    let source = "live";
-    if (Object.keys(assets).length < 5) source = "fallback";
-    Object.keys(this.FALLBACK).forEach((sym) => {
-      if (!assets[sym]) {
-        const p = this.FALLBACK[sym] * (1 + (Math.random() - 0.5) * 0.004);
-        assets[sym] = { price: p, change: (Math.random() - 0.5) * 2, symbol: sym.toUpperCase() };
+    yahooResults.forEach(([key, y]) => {
+      if (y) {
+        assets[key] = {
+          price: y.price,
+          change: y.change,
+          symbol: key.toUpperCase(),
+          unit: y.unit || "unit",
+        };
       }
     });
 
+    Object.entries(crypto).forEach(([k, v]) => {
+      if (!assets[k] || Math.abs((assets[k].change || 0)) < Math.abs(v.change || 0)) {
+        assets[k] = { price: v.price, change: v.change, symbol: k.toUpperCase().slice(0, 3), unit: "unit" };
+      }
+    });
+
+    if (forex.usd_inr) assets.usd_inr = { price: forex.usd_inr, change: 0, symbol: "USD/INR", unit: "rate" };
+    if (forex.eur_usd) assets.eur_usd = { price: forex.eur_usd, change: 0, symbol: "EUR/USD", unit: "rate" };
+    if (forex.gbp_usd) assets.gbp_usd = { price: forex.gbp_usd, change: 0, symbol: "GBP/USD", unit: "rate" };
+
+    let liveCount = Object.keys(assets).length;
+    Object.keys(this.FALLBACK).forEach((sym) => {
+      if (!assets[sym]) {
+        assets[sym] = {
+          price: this.FALLBACK[sym],
+          change: 0,
+          symbol: sym.toUpperCase(),
+          unit: this.METALS.includes(sym) ? "oz" : "unit",
+        };
+      }
+    });
+
+    const source = liveCount >= 8 ? "live" : liveCount >= 4 ? "mixed" : "fallback";
     return { timestamp: new Date().toISOString(), source, assets };
   },
 
-  formatPrice(sym, price, currency) {
+  formatPrice(sym, priceUsd, currency) {
     const cur = currency || localStorage.getItem("lexora_currency") || "INR";
-    const n = Number(price);
+    const n = Number(priceUsd);
+    if (!Number.isFinite(n)) return "—";
     if (sym === "usd_inr") return "₹" + n.toFixed(2);
     if (sym === "eur_usd" || sym === "gbp_usd") return n.toFixed(4);
+    if (this.METALS.includes(sym)) {
+      if (cur === "USD") {
+        return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 }) + " /oz";
+      }
+      const perGram = this.usdPerGram(n) * (this.fxRates[cur] || this.usdInrRate);
+      return this.formatAmount(perGram, cur) + " /g";
+    }
     const converted = cur === "USD" ? n : this.convertFromUsd(n, cur);
     return this.formatAmount(converted, cur);
+  },
+
+  /** Live price for calculator fields (per gram for metals in selected currency) */
+  calcLivePrice(sym, assets, currency) {
+    const a = assets?.[sym];
+    if (!a) return null;
+    const cur = currency || "INR";
+    const usd = Number(a.price);
+    if (this.METALS.includes(sym)) {
+      const perGramUsd = this.usdPerGram(usd);
+      if (cur === "USD") return Math.round(perGramUsd * 100) / 100;
+      const rate = this.fxRates[cur] || this.usdInrRate;
+      return Math.round(perGramUsd * rate * 100) / 100;
+    }
+    if (cur === "USD") return Math.round(usd * 100) / 100;
+    return Math.round(this.convertFromUsd(usd, cur) * 100) / 100;
   },
 
   formatAmount(amount, currency) {

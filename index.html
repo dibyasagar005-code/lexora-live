@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LexorA — Luxury Exchange Of Real-time Assets</title>
-  <link rel="stylesheet" href="static/style.css?v=3">
+  <link rel="stylesheet" href="static/style.css?v=4">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -13,11 +13,13 @@
     <div class="ticker-content" id="tickerContent">Loading…</div>
   </div>
 
+  <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
   <div class="app-layout">
     <aside class="sidebar" id="sidebar">
+      <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
       <div class="sidebar-brand">
-        <div class="logo-icon">◈</div>
-        <div>
+        <div class="logo-icon" aria-hidden="true">◈</div>
+        <div class="brand-text">
           <h1>LexorA</h1>
           <span class="tagline">Luxury Exchange Of Real-time Assets</span>
         </div>
@@ -51,13 +53,13 @@
     </aside>
 
     <main class="main-content">
-      <button class="mobile-menu-btn" id="menuBtn">☰</button>
+      <button type="button" class="mobile-menu-btn" id="menuBtn" aria-label="Open menu">☰ Menu</button>
 
       <!-- HOME -->
       <div class="page-view" data-page="home">
         <section class="page-header">
           <h2>AI Investment Intelligence</h2>
-          <p>Real-time Gold · Crypto · Forex · Stocks · Commodities</p>
+          <p>Live Yahoo · CoinGecko · Frankfurter — real asset prices</p>
           <span class="refresh-badge" id="refreshBadge">Connecting APIs…</span>
         </section>
         <div class="hero-grid">
@@ -68,7 +70,7 @@
           </div>
           <div class="hero-card glass accent">
             <h3>Live APIs</h3>
-            <p>CoinGecko · Frankfurter · Metals.live · Yahoo Finance</p>
+            <p>Yahoo Finance · CoinGecko · Frankfurter FX</p>
             <button type="button" class="btn btn-primary btn-sm" onclick="LexoraApp.refreshMarketData()">Refresh Now</button>
           </div>
           <div class="hero-card glass">
@@ -183,6 +185,10 @@
             <form class="calc-form" data-type="gold">
               <div class="form-group"><label>Gold (grams)</label><input type="number" name="grams" value="10" step="0.1"></div>
               <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="6500" step="0.01"></div>
+              <div class="form-group form-group-wide">
+                <span class="live-price-badge" data-live-badge="gold">Live price loading…</span>
+                <button type="button" class="btn btn-outline btn-sm" data-live-price="gold" data-live-field="price">Use live gold price</button>
+              </div>
               <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
               <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="8" step="0.1"></div>
               <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
@@ -194,6 +200,10 @@
             <form class="calc-form" data-type="silver">
               <div class="form-group"><label>Silver (grams)</label><input type="number" name="grams" value="100" step="1"></div>
               <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="85" step="0.01"></div>
+              <div class="form-group form-group-wide">
+                <span class="live-price-badge" data-live-badge="silver">Live price loading…</span>
+                <button type="button" class="btn btn-outline btn-sm" data-live-price="silver" data-live-field="price">Use live silver price</button>
+              </div>
               <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
               <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="6" step="0.1"></div>
               <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
@@ -204,6 +214,10 @@
             <h4>Crypto Profit Calculator</h4>
             <form class="calc-form" data-type="crypto">
               <div class="form-group"><label class="lbl-money">Buy Price</label><input type="number" name="buy_price" value="50000"></div>
+              <div class="form-group form-group-wide">
+                <span class="live-price-badge" data-live-badge="bitcoin">Live BTC loading…</span>
+                <button type="button" class="btn btn-outline btn-sm" data-live-price="bitcoin" data-live-field="buy_price">Use live BTC price</button>
+              </div>
               <div class="form-group"><label class="lbl-money">Sell Price</label><input type="number" name="sell_price" value="65000"></div>
               <div class="form-group"><label>Quantity</label><input type="number" name="quantity" value="1" step="0.0001"></div>
               <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
@@ -236,8 +250,8 @@
     </main>
   </div>
 
-  <script src="static/api.js?v=3"></script>
-  <script src="static/charts.js?v=3"></script>
-  <script src="static/app.js?v=3"></script>
+  <script src="static/api.js?v=4"></script>
+  <script src="static/charts.js?v=4"></script>
+  <script src="static/app.js?v=4"></script>
 </body>
 </html>

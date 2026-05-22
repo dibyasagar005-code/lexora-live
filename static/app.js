@@ -46,14 +46,53 @@ const LexoraApp = {
     document.querySelectorAll(".nav-link[data-page]").forEach((el) => {
       el.classList.toggle("active", el.dataset.page === page);
     });
+    this.closeMobileSidebar();
     if (page === "markets") this.renderMarketsTable();
     if (page === "prediction") this.loadPrediction(document.querySelector(".symbol-chip.active")?.dataset.sym || "bitcoin");
     if (page === "markets" && document.getElementById("livePriceChart")) LexoraCharts.initLivePriceChart("livePriceChart");
+    if (page === "calculator") this.syncCalculatorLivePrices();
+  },
+
+  closeMobileSidebar() {
+    document.getElementById("sidebar")?.classList.remove("open");
+    document.getElementById("sidebarBackdrop")?.classList.remove("visible");
+    document.body.classList.remove("menu-open");
+  },
+
+  openMobileSidebar() {
+    document.getElementById("sidebar")?.classList.add("open");
+    document.getElementById("sidebarBackdrop")?.classList.add("visible");
+    document.body.classList.add("menu-open");
   },
 
   initMobileMenu() {
-    document.getElementById("menuBtn")?.addEventListener("click", () => {
-      document.getElementById("sidebar")?.classList.toggle("open");
+    document.getElementById("menuBtn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const sb = document.getElementById("sidebar");
+      if (sb?.classList.contains("open")) this.closeMobileSidebar();
+      else this.openMobileSidebar();
+    });
+    document.getElementById("sidebarClose")?.addEventListener("click", () => this.closeMobileSidebar());
+    document.getElementById("sidebarBackdrop")?.addEventListener("click", () => this.closeMobileSidebar());
+    document.querySelectorAll(".sidebar-nav .nav-link").forEach((link) => {
+      link.addEventListener("click", () => this.closeMobileSidebar());
+    });
+  },
+
+  getLiveCalcPrice(sym) {
+    if (typeof LexoraAPI === "undefined" || !this.market?.assets) return null;
+    return LexoraAPI.calcLivePrice(sym, this.market.assets, this.currency);
+  },
+
+  syncCalculatorLivePrices() {
+    if (!this.market?.assets) return;
+    document.querySelectorAll("[data-live-badge]").forEach((el) => {
+      const sym = el.dataset.liveBadge;
+      const p = this.getLiveCalcPrice(sym);
+      if (p != null) {
+        const unit = ["gold", "silver", "platinum"].includes(sym) ? "/g" : "";
+        el.textContent = `Live: ${this.formatCalcMoney(p)}${unit}`;
+      }
     });
   },
 
@@ -79,6 +118,7 @@ const LexoraApp = {
       if (src) src.textContent = this.market.source.toUpperCase();
       if (pulse) pulse.textContent = this.market.source === "live" ? "● LIVE" : "● Fallback";
       if (this.currentPage === "markets") this.renderMarketsTable();
+      if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       LexoraCharts.initComparisonChart("comparisonChart");
       LexoraCharts.initVolatilityChart("volatilityChart");
       this.loadQuickSignals();
@@ -378,6 +418,23 @@ const LexoraApp = {
         document.querySelectorAll(".calc-panel").forEach((p) => p.classList.remove("active"));
         tab.classList.add("active");
         document.getElementById("calc-" + tab.dataset.calc)?.classList.add("active");
+      });
+    });
+
+    document.querySelectorAll("[data-live-price]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!this.market?.assets) await this.refreshMarketData();
+        const sym = btn.dataset.livePrice;
+        const price = this.getLiveCalcPrice(sym);
+        const form = btn.closest("form");
+        if (!form || price == null) return;
+        const field = btn.dataset.liveField || "price";
+        const input = form.querySelector(`[name="${field}"]`);
+        if (input) {
+          input.value = price;
+          input.classList.add("price-flash");
+          setTimeout(() => input.classList.remove("price-flash"), 600);
+        }
       });
     });
 
