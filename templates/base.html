@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}LexorA AI Market Predictor{% endblock %}</title>
+    <title>{% block title %}LexorA — Luxury Exchange Of Real-time Assets{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     {% block head %}{% endblock %}
@@ -22,8 +22,15 @@
                 <div class="logo-icon">◈</div>
                 <div>
                     <h1>LexorA</h1>
-                    <span class="tagline">AI Market Predictor</span>
+                    <span class="tagline">Luxury Exchange Of Real-time Assets</span>
                 </div>
+            </div>
+            <div class="currency-switch glass">
+                <label for="currencySelect">Display currency</label>
+                <select id="currencySelect" aria-label="Currency">
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                </select>
             </div>
             <div class="live-status">
                 <span class="status-dot"></span>
@@ -82,8 +89,14 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='api.js') }}"></script>
     <script src="{{ url_for('static', filename='charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        if (window.LexoraApp && LexoraApp.initCurrency) LexoraApp.initCurrency();
+      });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

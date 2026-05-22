@@ -365,9 +365,9 @@ def api_calculate():
             "returns": round(fv - invested, 2),
         })
 
-    if calc_type == "gold":
+    if calc_type in ("gold", "silver"):
         grams = float(data.get("grams", 10))
-        price_per_gram = float(data.get("price", 6500))
+        price_per_gram = float(data.get("price", 65))
         years = int(data.get("years", 5))
         appreciation = float(data.get("appreciation", 8)) / 100
         current_value = grams * price_per_gram
@@ -395,10 +395,12 @@ def api_calculate():
         else:
             emi = principal / tenure
         total = emi * tenure
+        interest = round(total - principal, 2)
         return jsonify({
             "emi": round(emi, 2),
             "total_payment": round(total, 2),
-            "interest": round(total - principal, 2),
+            "total_interest": interest,
+            "interest": interest,
         })
 
     if calc_type == "compound":
@@ -407,9 +409,12 @@ def api_calculate():
         years = int(data.get("years", 10))
         frequency = int(data.get("frequency", 4))
         amount = principal * (1 + rate / frequency) ** (frequency * years)
+        maturity = round(amount, 2)
+        earned = round(amount - principal, 2)
         return jsonify({
-            "final_amount": round(amount, 2),
-            "interest_earned": round(amount - principal, 2),
+            "maturity": maturity,
+            "final_amount": maturity,
+            "interest_earned": earned,
         })
 
     return jsonify({"error": "Unknown calculator type"}), 400

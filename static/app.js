@@ -6,9 +6,15 @@ const LexoraApp = {
   refreshTimer: null,
   market: null,
   currentPage: "home",
+  currency: localStorage.getItem("lexora_currency") || "INR",
+  usdInrRate: 83.25,
 
   init() {
-    document.getElementById("tickerContent").textContent = LexoraAPI.newsHeadlines().join("  ·  ");
+    this.initCurrency();
+    const ticker = document.getElementById("tickerContent");
+    if (ticker && typeof LexoraAPI !== "undefined") {
+      ticker.textContent = LexoraAPI.newsHeadlines().join("  ·  ");
+    }
     this.initNav();
     this.initMobileMenu();
     this.initMarketTabs();
@@ -60,6 +66,10 @@ const LexoraApp = {
     if (pulse) pulse.textContent = "Updating live data…";
     try {
       this.market = await LexoraAPI.fetchMarket();
+      if (this.market?.assets?.usd_inr?.price) {
+        this.usdInrRate = this.market.assets.usd_inr.price;
+        LexoraAPI.usdInrRate = this.usdInrRate;
+      }
       this.updateMarketCards(this.market);
       this.updateLastRefresh(this.market.timestamp);
       const badge = document.getElementById("refreshBadge");
@@ -93,7 +103,7 @@ const LexoraApp = {
         const changeEl = card.querySelector(".card-change");
         if (priceEl) {
           priceEl.classList.add("price-flash");
-          priceEl.textContent = LexoraAPI.formatPrice(symbol, asset.price);
+          priceEl.textContent = this.formatPrice(symbol, asset.price);
           setTimeout(() => priceEl.classList.remove("price-flash"), 500);
         }
         if (changeEl) {
@@ -131,7 +141,7 @@ const LexoraApp = {
     body.innerHTML = Object.entries(this.market.assets).map(([sym, a]) => `
       <tr data-symbol="${sym}">
         <td><strong>${LexoraAPI.label(sym)}</strong></td>
-        <td class="price-cell">${LexoraAPI.formatPrice(sym, a.price)}</td>
+        <td class="price-cell">${this.formatPrice(sym, a.price)}</td>
         <td class="${(a.change || 0) >= 0 ? "positive" : "negative"}">${(a.change || 0) >= 0 ? "+" : ""}${(a.change || 0).toFixed(2)}%</td>
         <td><span class="signal-badge hold" data-signal="${sym}">—</span></td>
         <td><button type="button" class="btn btn-sm btn-outline" data-analyze="${sym}">Analyze</button></td>
@@ -152,7 +162,7 @@ const LexoraApp = {
     try {
       const data = await LexoraAPI.predictAll();
       box.innerHTML = "";
-      ["gold", "silver", "bitcoin", "ethereum", "crude_oil"].forEach((sym) => {
+      ["gold", "silver", "platinum", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq", "usd_inr"].forEach((sym) => {
         const p = data[sym];
         if (!p) return;
         const d = document.createElement("div");
@@ -211,13 +221,13 @@ const LexoraApp = {
       <div class="prediction-hero glass">
         <div class="pred-main">
           <h3>${LexoraAPI.label(symbol)}</h3>
-          <div class="current-price">${LexoraAPI.formatPrice(symbol, p.current_price)}</div>
+          <div class="current-price">${this.formatPrice(symbol, p.current_price)}</div>
           <div class="signal-large signal-${p.signal.toLowerCase()}">${p.signal}</div>
           <div class="confidence-bar"><div class="confidence-fill" style="width:${p.confidence}%"></div></div>
           <span class="confidence-text">${p.confidence}% Confidence</span>
         </div>
         <div class="pred-metrics">
-          <div class="metric"><label>Expected</label><span>${LexoraAPI.formatPrice(symbol, p.expected_price)}</span></div>
+          <div class="metric"><label>Expected</label><span>${this.formatPrice(symbol, p.expected_price)}</span></div>
           <div class="metric"><label>Trend</label><span class="trend-${p.trend}">${p.trend}</span></div>
           <div class="metric"><label>RSI</label><span>${p.rsi}</span></div>
           <div class="metric"><label>Volatility</label><span>${p.volatility}%</span></div>
@@ -232,6 +242,69 @@ const LexoraApp = {
       </div>`;
     LexoraCharts.initHistoryChart("historyChart", p.historical);
     LexoraCharts.initForecastChart("forecastChart", p.historical, p.forecast);
+  },
+
+  initCurrency() {
+    const sel = document.getElementById("currencySelect");
+    if (sel) {
+      sel.value = this.currency;
+      sel.addEventListener("change", () => {
+        this.currency = sel.value;
+        localStorage.setItem("lexora_currency", this.currency);
+        this.applyMoneyLabels();
+        if (this.market) this.updateMarketCards(this.market);
+        if (this.currentPage === "markets") this.renderMarketsTable();
+      });
+    }
+    this.applyMoneyLabels();
+  },
+
+  moneySymbol() {
+    return this.currency === "INR" ? "₹" : "$";
+  },
+
+  applyMoneyLabels() {
+    const sym = this.moneySymbol();
+    document.querySelectorAll(".lbl-money").forEach((lbl) => {
+      const base = lbl.dataset.base || lbl.textContent.split("(")[0].trim();
+      lbl.dataset.base = base;
+      lbl.textContent = `${base} (${sym})`;
+    });
+  },
+
+  formatPrice(sym, price) {
+    if (typeof LexoraAPI !== "undefined" && LexoraAPI.formatPrice) {
+      return LexoraAPI.formatPrice(sym, price, this.currency, this.usdInrRate);
+    }
+    return this.formatMoney(price, sym);
+  },
+
+  formatMoney(amount, sym) {
+    const n = Number(amount);
+    if (Number.isNaN(n)) return "—";
+    if (sym === "usd_inr") return "₹" + n.toFixed(2);
+    if (sym === "eur_usd" || sym === "gbp_usd") return n.toFixed(4);
+    if (this.currency === "INR") {
+      const inr = n * (this.usdInrRate || 83.25);
+      if (inr >= 100000) return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+      return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    }
+    if (n >= 10000) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    return "$" + n.toFixed(2);
+  },
+
+  isLocalFlask() {
+    return /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  },
+
+  normalizeCalcResult(type, r) {
+    if (!r || r.error) return null;
+    if (type === "emi" && r.total_interest == null && r.interest != null) r.total_interest = r.interest;
+    if (type === "compound") {
+      if (r.maturity == null && r.final_amount != null) r.maturity = r.final_amount;
+      if (r.interest_earned == null && r.interest != null) r.interest_earned = r.interest;
+    }
+    return r;
   },
 
   initCalculators() {
@@ -251,14 +324,18 @@ const LexoraApp = {
         const body = { type };
         fd.forEach((v, k) => (body[k] = parseFloat(v) || v));
         let result;
-        if (LexoraAPI.isLocalFlask()) {
+        if (this.isLocalFlask()) {
           try {
-            const r = await fetch("/api/calculate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-            result = await r.json();
-          } catch (err) { /* */ }
+            const r = await fetch("/api/calculate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (r.ok) result = await r.json();
+          } catch (err) { /* client fallback */ }
         }
-        if (!result) result = this.calcClient(type, body);
-        this.displayCalcResult(type, result);
+        if (!result || result.error) result = this.calcClient(type, body);
+        this.displayCalcResult(type, this.normalizeCalcResult(type, result));
       });
     });
   },
@@ -267,26 +344,71 @@ const LexoraApp = {
     if (type === "sip") {
       const r = b.rate / 100 / 12, m = b.years * 12;
       const fv = r > 0 ? b.monthly * (((1 + r) ** m - 1) / r) * (1 + r) : b.monthly * m;
-      return { future_value: fv, invested: b.monthly * m, returns: fv - b.monthly * m };
+      const invested = b.monthly * m;
+      return { future_value: fv, invested, returns: fv - invested };
     }
-    if (type === "gold") {
+    if (type === "gold" || type === "silver") {
       const cur = b.grams * b.price;
       const fut = cur * Math.pow(1 + (b.appreciation || 8) / 100, b.years);
       return { current_value: cur, future_value: fut, profit: fut - cur };
     }
     if (type === "crypto") {
       const profit = (b.sell_price - b.buy_price) * b.quantity;
-      return { profit, roi: ((b.sell_price - b.buy_price) / b.buy_price) * 100 };
+      const roi = b.buy_price ? ((b.sell_price - b.buy_price) / b.buy_price) * 100 : 0;
+      return { profit, roi };
+    }
+    if (type === "emi") {
+      const mr = b.rate / 100 / 12;
+      const emi = mr > 0
+        ? (b.principal * mr * Math.pow(1 + mr, b.tenure)) / (Math.pow(1 + mr, b.tenure) - 1)
+        : b.principal / b.tenure;
+      const total = emi * b.tenure;
+      return { emi, total_payment: total, total_interest: total - b.principal };
+    }
+    if (type === "compound") {
+      const n = b.frequency || 4;
+      const amount = b.principal * Math.pow(1 + b.rate / 100 / n, n * b.years);
+      return { maturity: amount, interest_earned: amount - b.principal };
     }
     return {};
   },
 
   displayCalcResult(type, r) {
     const el = document.getElementById("result-" + type);
-    if (!el) return;
-    if (type === "sip" && r.future_value)
-      el.innerHTML = `<strong>Future:</strong> $${r.future_value.toLocaleString()} · <strong>Returns:</strong> $${r.returns.toLocaleString()}`;
-    else el.innerHTML = JSON.stringify(r);
+    if (!el || !r) {
+      if (el) el.textContent = "Could not calculate. Check your inputs.";
+      return;
+    }
+    const fmt = (n) => this.formatMoney(n);
+    if (type === "sip" && r.future_value != null) {
+      el.innerHTML = `<p><strong>Future value:</strong> ${fmt(r.future_value)}</p>
+        <p><strong>Invested:</strong> ${fmt(r.invested)}</p>
+        <p><strong>Returns:</strong> ${fmt(r.returns)}</p>`;
+      return;
+    }
+    if ((type === "gold" || type === "silver") && r.future_value != null) {
+      el.innerHTML = `<p><strong>Current:</strong> ${fmt(r.current_value)}</p>
+        <p><strong>Future:</strong> ${fmt(r.future_value)}</p>
+        <p><strong>Profit:</strong> ${fmt(r.profit)}</p>`;
+      return;
+    }
+    if (type === "crypto" && r.profit != null) {
+      el.innerHTML = `<p><strong>Profit/Loss:</strong> ${fmt(r.profit)}</p>
+        <p><strong>ROI:</strong> ${Number(r.roi).toFixed(2)}%</p>`;
+      return;
+    }
+    if (type === "emi" && r.emi != null) {
+      el.innerHTML = `<p><strong>Monthly EMI:</strong> ${fmt(r.emi)}</p>
+        <p><strong>Total payment:</strong> ${fmt(r.total_payment)}</p>
+        <p><strong>Total interest:</strong> ${fmt(r.total_interest)}</p>`;
+      return;
+    }
+    if (type === "compound" && r.maturity != null) {
+      el.innerHTML = `<p><strong>Maturity:</strong> ${fmt(r.maturity)}</p>
+        <p><strong>Interest earned:</strong> ${fmt(r.interest_earned)}</p>`;
+      return;
+    }
+    el.innerHTML = "<p>Could not calculate. Check your inputs.</p>";
   },
 };
 

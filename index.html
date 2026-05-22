@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LexorA AI Market Predictor</title>
+  <title>LexorA — Luxury Exchange Of Real-time Assets</title>
   <link rel="stylesheet" href="static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -17,7 +17,10 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <div class="logo-icon">◈</div>
-        <div><h1>LexorA</h1><span class="tagline">AI Market Predictor</span></div>
+        <div>
+          <h1>LexorA</h1>
+          <span class="tagline">Luxury Exchange Of Real-time Assets</span>
+        </div>
       </div>
       <div class="live-status">
         <span class="status-dot"></span>
@@ -30,9 +33,15 @@
         <a href="#" class="nav-link" data-page="prediction"><span class="nav-icon">◎</span> AI Prediction</a>
         <a href="#" class="nav-link" data-page="calculator"><span class="nav-icon">⊕</span> Calculator</a>
       </nav>
+      <div class="currency-switch glass">
+        <label for="currencySelect">Display currency</label>
+        <select id="currencySelect" aria-label="Currency">
+          <option value="INR">INR (₹)</option>
+          <option value="USD">USD ($)</option>
+        </select>
+      </div>
       <div class="sidebar-footer">
-        <p class="setting-info">API: <strong id="dataSource">LIVE</strong></p>
-        <p class="setting-info">Local full app: <a href="http://127.0.0.1:5000" style="color:var(--cyan)">127.0.0.1:5000</a></p>
+        <p class="setting-info">Data: <strong id="dataSource">LIVE</strong></p>
       </div>
     </aside>
 
@@ -109,12 +118,15 @@
           <div class="symbol-selector">
             <a href="#" class="symbol-chip active" data-sym="gold">Gold</a>
             <a href="#" class="symbol-chip" data-sym="silver">Silver</a>
+            <a href="#" class="symbol-chip" data-sym="platinum">Platinum</a>
             <a href="#" class="symbol-chip" data-sym="bitcoin">Bitcoin</a>
             <a href="#" class="symbol-chip" data-sym="ethereum">Ethereum</a>
             <a href="#" class="symbol-chip" data-sym="crude_oil">Crude Oil</a>
-            <a href="#" class="symbol-chip" data-sym="platinum">Platinum</a>
             <a href="#" class="symbol-chip" data-sym="sp500">S&P 500</a>
+            <a href="#" class="symbol-chip" data-sym="nasdaq">NASDAQ</a>
             <a href="#" class="symbol-chip" data-sym="usd_inr">USD/INR</a>
+            <a href="#" class="symbol-chip" data-sym="eur_usd">EUR/USD</a>
+            <a href="#" class="symbol-chip" data-sym="gbp_usd">GBP/USD</a>
           </div>
         </section>
         <div id="predictionPanel"><p class="loading-spinner">Select asset…</p></div>
@@ -122,38 +134,82 @@
 
       <!-- CALCULATOR -->
       <div class="page-view" data-page="calculator">
-        <section class="page-header"><h2>Calculators</h2></section>
+        <section class="page-header">
+          <h2>Investment Calculators</h2>
+          <p>SIP · Gold · Silver · Crypto · EMI · Compound Interest</p>
+        </section>
         <div class="calc-tabs">
-          <button class="tab active" data-calc="sip">SIP</button>
-          <button class="tab" data-calc="gold">Gold</button>
-          <button class="tab" data-calc="crypto">Crypto</button>
+          <button type="button" class="tab active" data-calc="sip">SIP</button>
+          <button type="button" class="tab" data-calc="gold">Gold</button>
+          <button type="button" class="tab" data-calc="silver">Silver</button>
+          <button type="button" class="tab" data-calc="crypto">Crypto Profit</button>
+          <button type="button" class="tab" data-calc="emi">EMI</button>
+          <button type="button" class="tab" data-calc="compound">Compound</button>
         </div>
-        <div class="calc-panel glass active" id="calc-sip">
-          <form class="calc-form" data-type="sip">
-            <div class="form-group"><label>Monthly ($)</label><input type="number" name="monthly" value="5000"></div>
-            <div class="form-group"><label>Rate %</label><input type="number" name="rate" value="12"></div>
-            <div class="form-group"><label>Years</label><input type="number" name="years" value="10"></div>
-            <button type="submit" class="btn btn-primary">Calculate</button>
-          </form>
-          <div class="calc-result" id="result-sip"></div>
-        </div>
-        <div class="calc-panel glass" id="calc-gold">
-          <form class="calc-form" data-type="gold">
-            <div class="form-group"><label>Grams</label><input type="number" name="grams" value="10"></div>
-            <div class="form-group"><label>Price/g</label><input type="number" name="price" value="65"></div>
-            <div class="form-group"><label>Years</label><input type="number" name="years" value="5"></div>
-            <button type="submit" class="btn btn-primary">Calculate</button>
-          </form>
-          <div class="calc-result" id="result-gold"></div>
-        </div>
-        <div class="calc-panel glass" id="calc-crypto">
-          <form class="calc-form" data-type="crypto">
-            <div class="form-group"><label>Buy</label><input type="number" name="buy_price" value="50000"></div>
-            <div class="form-group"><label>Sell</label><input type="number" name="sell_price" value="65000"></div>
-            <div class="form-group"><label>Qty</label><input type="number" name="quantity" value="1"></div>
-            <button type="submit" class="btn btn-primary">Calculate</button>
-          </form>
-          <div class="calc-result" id="result-crypto"></div>
+        <div class="calc-panels">
+          <div class="calc-panel glass active" id="calc-sip">
+            <h4>SIP Calculator</h4>
+            <form class="calc-form" data-type="sip">
+              <div class="form-group"><label class="lbl-money">Monthly Investment</label><input type="number" name="monthly" value="5000" step="100"></div>
+              <div class="form-group"><label>Expected Return (% p.a.)</label><input type="number" name="rate" value="12" step="0.1"></div>
+              <div class="form-group"><label>Duration (years)</label><input type="number" name="years" value="10" min="1"></div>
+              <button type="submit" class="btn btn-primary">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-sip">Enter values and calculate</div>
+          </div>
+          <div class="calc-panel glass" id="calc-gold">
+            <h4>Gold Investment Calculator</h4>
+            <form class="calc-form" data-type="gold">
+              <div class="form-group"><label>Gold (grams)</label><input type="number" name="grams" value="10" step="0.1"></div>
+              <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="6500" step="0.01"></div>
+              <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
+              <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="8" step="0.1"></div>
+              <button type="submit" class="btn btn-primary">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-gold">Enter values and calculate</div>
+          </div>
+          <div class="calc-panel glass" id="calc-silver">
+            <h4>Silver Investment Calculator</h4>
+            <form class="calc-form" data-type="silver">
+              <div class="form-group"><label>Silver (grams)</label><input type="number" name="grams" value="100" step="1"></div>
+              <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="85" step="0.01"></div>
+              <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
+              <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="6" step="0.1"></div>
+              <button type="submit" class="btn btn-primary">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-silver">Enter values and calculate</div>
+          </div>
+          <div class="calc-panel glass" id="calc-crypto">
+            <h4>Crypto Profit Calculator</h4>
+            <form class="calc-form" data-type="crypto">
+              <div class="form-group"><label class="lbl-money">Buy Price</label><input type="number" name="buy_price" value="50000"></div>
+              <div class="form-group"><label class="lbl-money">Sell Price</label><input type="number" name="sell_price" value="65000"></div>
+              <div class="form-group"><label>Quantity</label><input type="number" name="quantity" value="1" step="0.0001"></div>
+              <button type="submit" class="btn btn-primary">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-crypto">Enter values and calculate</div>
+          </div>
+          <div class="calc-panel glass" id="calc-emi">
+            <h4>EMI Calculator</h4>
+            <form class="calc-form" data-type="emi">
+              <div class="form-group"><label class="lbl-money">Loan Amount</label><input type="number" name="principal" value="1000000"></div>
+              <div class="form-group"><label>Interest Rate (% p.a.)</label><input type="number" name="rate" value="8.5" step="0.1"></div>
+              <div class="form-group"><label>Tenure (months)</label><input type="number" name="tenure" value="240" min="1"></div>
+              <button type="submit" class="btn btn-primary">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-emi">Enter values and calculate</div>
+          </div>
+          <div class="calc-panel glass" id="calc-compound">
+            <h4>Compound Interest Calculator</h4>
+            <form class="calc-form" data-type="compound">
+              <div class="form-group"><label class="lbl-money">Principal</label><input type="number" name="principal" value="100000"></div>
+              <div class="form-group"><label>Rate (% p.a.)</label><input type="number" name="rate" value="10" step="0.1"></div>
+              <div class="form-group"><label>Years</label><input type="number" name="years" value="10" min="1"></div>
+              <div class="form-group"><label>Compounding per year</label><input type="number" name="frequency" value="4" min="1"></div>
+              <button type="submit" class="btn btn-primary">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-compound">Enter values and calculate</div>
+          </div>
         </div>
       </div>
     </main>

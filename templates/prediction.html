@@ -4,7 +4,7 @@
 <section class="page-header">
     <h2>AI Prediction Engine</h2>
     <div class="symbol-selector">
-        {% for s in ['gold','silver','bitcoin','ethereum','crude_oil','platinum','sp500','usd_inr'] %}
+        {% for s in ['gold','silver','platinum','bitcoin','ethereum','crude_oil','sp500','nasdaq','usd_inr','eur_usd','gbp_usd'] %}
         <a href="{{ url_for('prediction', symbol=s) }}" class="symbol-chip {% if symbol == s %}active{% endif %}">{{ s|replace('_',' ')|title }}</a>
         {% endfor %}
     </div>

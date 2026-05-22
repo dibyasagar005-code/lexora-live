@@ -3,6 +3,7 @@
  * Used on GitHub Pages (no Flask server required).
  */
 const LexoraAPI = {
+  usdInrRate: 83.25,
   TIMEOUT: 12000,
   FALLBACK: {
     gold: 2650, silver: 31.5, bitcoin: 67500, ethereum: 3500, platinum: 980,
@@ -114,6 +115,7 @@ const LexoraAPI = {
     });
     if (f.usd_inr) assets.usd_inr = { price: f.usd_inr, change: 0, symbol: "USD/INR" };
     if (f.eur_usd) assets.eur_usd = { price: f.eur_usd, change: 0, symbol: "EUR/USD" };
+    if (f.gbp_usd) assets.gbp_usd = { price: f.gbp_usd, change: 0, symbol: "GBP/USD" };
 
     for (const key of ["sp500", "nasdaq", "crude_oil", "platinum"]) {
       const y = await this.fetchYahoo(key);
@@ -132,10 +134,19 @@ const LexoraAPI = {
     return { timestamp: new Date().toISOString(), source, assets };
   },
 
-  formatPrice(sym, price) {
-    if (sym === "usd_inr") return "₹" + Number(price).toFixed(2);
-    if (price >= 10000) return "$" + Number(price).toLocaleString("en-US", { maximumFractionDigits: 0 });
-    return "$" + Number(price).toFixed(2);
+  formatPrice(sym, price, currency, usdInr) {
+    const cur = currency || localStorage.getItem("lexora_currency") || "INR";
+    const rate = usdInr || this.usdInrRate || 83.25;
+    const n = Number(price);
+    if (sym === "usd_inr") return "₹" + n.toFixed(2);
+    if (sym === "eur_usd" || sym === "gbp_usd") return n.toFixed(4);
+    if (cur === "INR") {
+      const inr = n * rate;
+      if (inr >= 100000) return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+      return "₹" + inr.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    }
+    if (n >= 10000) return "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    return "$" + n.toFixed(2);
   },
 
   label(sym) {
@@ -214,7 +225,10 @@ const LexoraAPI = {
         if (j.success) return j.data;
       } catch (e) { /* */ }
     }
-    const syms = ["gold", "silver", "bitcoin", "ethereum", "platinum", "crude_oil", "sp500", "usd_inr"];
+    const syms = [
+      "gold", "silver", "platinum", "bitcoin", "ethereum",
+      "crude_oil", "sp500", "nasdaq", "usd_inr", "eur_usd", "gbp_usd",
+    ];
     const out = {};
     for (const s of syms) out[s] = await this.predict(s);
     return out;

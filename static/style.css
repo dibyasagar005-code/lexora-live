@@ -90,7 +90,36 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
-.tagline { font-size: 11px; color: var(--text-muted); }
+.tagline {
+  display: block;
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  max-width: 155px;
+  text-transform: none;
+}
+.currency-switch {
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.currency-switch label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.currency-switch select {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
 .logo-icon {
     font-size: 2rem;
     color: var(--cyan);
@@ -471,9 +500,17 @@ body {
     background: rgba(0,240,255,0.05);
     border-radius: 12px;
     border: 1px solid var(--border);
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+    line-height: 1.7;
 }
+.calc-result p { margin: 6px 0; }
 .calc-result strong { color: var(--gold); }
+.calc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
 
 /* Watchlist */
 .watchlist-add { display: flex; gap: 12px; margin-bottom: 24px; padding: 20px; }
@@ -537,10 +574,21 @@ body {
 
 /* Responsive */
 @media (max-width: 900px) {
-    .sidebar { transform: translateX(-100%); }
+    .sidebar { transform: translateX(-100%); width: min(280px, 88vw); }
     .sidebar.open { transform: translateX(0); }
-    .main-content { margin-left: 0; padding: 20px; padding-top: 60px; }
+    .main-content { margin-left: 0; padding: 16px; padding-top: 56px; }
     .mobile-menu-btn { display: block; }
     .prediction-hero { grid-template-columns: 1fr; }
     .chart-row { grid-template-columns: 1fr; }
+    .calc-form { grid-template-columns: 1fr; }
+    .calc-tabs .tab { flex: 1 1 auto; min-width: calc(50% - 8px); font-size: 12px; padding: 10px 8px; }
+    .symbol-selector .symbol-chip { font-size: 12px; padding: 8px 10px; }
+    .market-grid { grid-template-columns: 1fr 1fr; }
+    .page-header h2 { font-size: 1.35rem; }
+    .tagline { max-width: 100%; font-size: 8px; }
+}
+@media (max-width: 480px) {
+    .market-grid { grid-template-columns: 1fr; }
+    .calc-tabs .tab { min-width: 100%; }
+    .markets-table-wrap { overflow-x: auto; }
 }
