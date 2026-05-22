@@ -2,7 +2,8 @@
  * LexorA AI Market Predictor — works on localhost Flask AND GitHub Pages.
  */
 const LexoraApp = {
-  refreshInterval: 8000,
+  refreshInterval: 5000,
+  activePrediction: "gold",
   lastMarketFetch: Date.now(),
   refreshLabelTimer: null,
   refreshTimer: null,
@@ -24,7 +25,11 @@ const LexoraApp = {
     this.initCalculators();
     this.initPrediction();
     this.renderMarketSkeleton();
-    this.refreshMarketData();
+    this.refreshMarketData().then(() => {
+      if (document.querySelector('.page-view[data-page="prediction"]')) {
+        this.activePrediction = "gold";
+      }
+    });
     this.startLiveRefresh();
     if (document.getElementById("quickSignals")) this.loadQuickSignals();
     if (document.getElementById("comparisonChart")) LexoraCharts.initComparisonChart("comparisonChart");
@@ -53,7 +58,10 @@ const LexoraApp = {
       this.renderMarketsTable();
       if (this.market) LexoraCharts.initLivePriceChart("livePriceChart", this.market);
     }
-    if (page === "prediction") this.loadPrediction(document.querySelector(".symbol-chip.active")?.dataset.sym || "bitcoin");
+    if (page === "prediction") {
+      const sym = document.querySelector(".symbol-chip.active")?.dataset.sym || this.activePrediction || "gold";
+      this.loadPrediction(sym);
+    }
     if (page === "calculator") this.syncCalculatorLivePrices();
   },
 
@@ -127,13 +135,14 @@ const LexoraApp = {
         LexoraAPI.usdInrRate = this.usdInrRate;
       }
       this.updateMarketCards(this.market);
-      this.updateLastRefresh(this.market.timestamp);
+      this.updateLastRefresh();
       this.tickRefreshLabel();
       const src = document.getElementById("dataSource");
-      if (src) src.textContent = this.market.source.toUpperCase() + " · 8s refresh";
+      if (src) src.textContent = this.market.source.toUpperCase() + " · 5s instant";
       if (pulse) pulse.textContent = this.market.source === "live" ? "● INSTANT LIVE" : "● Mixed feed";
       if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
+      if (this.currentPage === "prediction") this.loadPrediction(this.activePrediction);
       LexoraCharts.refreshAll(this.market);
       this.loadQuickSignals();
       this.loadMarketSignals();
@@ -143,11 +152,24 @@ const LexoraApp = {
     }
   },
 
-  updateLastRefresh(ts) {
-    const el = document.getElementById("lastUpdate");
-    if (el) el.textContent = new Date(ts || Date.now()).toLocaleTimeString();
+  updateLastRefresh() {
     const c = document.getElementById("assetCount");
-    if (c && this.market) c.textContent = Object.keys(this.market.assets).length + " assets tracked";
+    if (c && this.market) {
+      c.textContent = Object.keys(this.market.assets).length + " assets · instant 5s";
+    }
+  },
+
+  async refreshAssetInstant(symbol) {
+    const hit = await LexoraAPI.fetchAssetLive(symbol);
+    if (!hit || !this.market?.assets) return;
+    this.market.assets[symbol] = {
+      price: hit.price,
+      change: hit.change,
+      symbol: symbol.toUpperCase(),
+      unit: hit.unit,
+      updated: Date.now(),
+    };
+    this.updateMarketCards(this.market);
   },
 
   updateMarketCards(market) {
@@ -225,7 +247,7 @@ const LexoraApp = {
     const box = document.getElementById("quickSignals");
     if (!box) return;
     try {
-      const data = await LexoraAPI.predictAll();
+      const data = await LexoraAPI.predictAll(this.market);
       box.innerHTML = "";
       ["gold", "silver", "platinum", "palladium", "copper", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq"].forEach((sym) => {
         const p = data[sym];
@@ -244,7 +266,7 @@ const LexoraApp = {
 
   async loadMarketSignals() {
     try {
-      const data = await LexoraAPI.predictAll();
+      const data = await LexoraAPI.predictAll(this.market);
       Object.entries(data).forEach(([sym, p]) => {
         const b = document.querySelector(`[data-signal="${sym}"]`);
         if (b) { b.textContent = p.signal; b.className = `signal-badge signal-${p.signal.toLowerCase()}`; }
@@ -277,6 +299,7 @@ const LexoraApp = {
         e.preventDefault();
         document.querySelectorAll(".symbol-chip").forEach((c) => c.classList.remove("active"));
         chip.classList.add("active");
+        this.activePrediction = chip.dataset.sym;
         this.loadPrediction(chip.dataset.sym);
       });
     });
@@ -285,9 +308,19 @@ const LexoraApp = {
   async loadPrediction(symbol) {
     const box = document.getElementById("predictionPanel");
     if (!box) return;
-    box.innerHTML = '<p class="loading-spinner">Running AI analysis…</p>';
-    const p = await LexoraAPI.predict(symbol);
+    this.activePrediction = symbol;
+    box.innerHTML = '<p class="loading-spinner">Fetching live price & AI analysis…</p>';
+    await this.refreshAssetInstant(symbol);
+    const liveAsset = this.market?.assets?.[symbol];
+    const liveLine = liveAsset
+      ? LexoraAPI.priceDisplay(symbol, liveAsset, this.currency)
+      : { primary: "—", secondary: "" };
+    const p = await LexoraAPI.predict(symbol, this.market);
+    const updated = liveAsset?.updated
+      ? new Date(liveAsset.updated).toLocaleTimeString()
+      : "just now";
     box.innerHTML = `
+      <p class="pred-live-strip">● LIVE spot ${liveLine.primary} <span>${liveLine.secondary}</span> · updated ${updated}</p>
       <div class="prediction-hero glass">
         <div class="pred-main">
           <h3>${LexoraAPI.label(symbol)}</h3>

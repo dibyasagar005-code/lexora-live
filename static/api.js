@@ -46,6 +46,7 @@ const LexoraAPI = {
     platinum: ["PL=F", "XPTUSD=X"],
     palladium: ["PA=F", "XPDUSD=X"],
   },
+  _lastPrices: {},
 
   isLocalFlask() {
     return location.hostname === "127.0.0.1" || location.hostname === "localhost";
@@ -83,11 +84,26 @@ const LexoraAPI = {
     }
   },
 
+  cacheBust(url) {
+    return url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now();
+  },
+
+  resolveChange(key, price, apiChange) {
+    const prev = this._lastPrices[key];
+    let change = Number(apiChange) || 0;
+    if (prev && prev > 0 && Math.abs(change) < 0.02) {
+      change = ((price - prev) / prev) * 100;
+    }
+    this._lastPrices[key] = price;
+    return Math.round(change * 100) / 100;
+  },
+
   async fetchWithProxies(path) {
+    const busted = this.cacheBust(path);
     const urls = [
-      path,
-      "https://corsproxy.io/?" + encodeURIComponent(path),
-      "https://api.allorigins.win/raw?url=" + encodeURIComponent(path),
+      busted,
+      this.cacheBust("https://corsproxy.io/?" + encodeURIComponent(path)),
+      this.cacheBust("https://api.allorigins.win/raw?url=" + encodeURIComponent(path)),
     ];
     for (const url of urls) {
       try {
@@ -97,8 +113,11 @@ const LexoraAPI = {
     throw new Error("All proxies failed");
   },
 
-  yahooChartUrl(symbol) {
-    return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  yahooChartUrl(symbol, fresh = false) {
+    if (fresh) {
+      return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
+    }
+    return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=5m&range=2d`;
   },
 
   isValidPrice(key, price) {
@@ -127,14 +146,14 @@ const LexoraAPI = {
     return "unit";
   },
 
-  async fetchYahooSymbol(sym, key) {
+  async fetchYahooSymbol(sym, key, fresh = false) {
     try {
-      const data = await this.fetchWithProxies(this.yahooChartUrl(sym));
+      const data = await this.fetchWithProxies(this.yahooChartUrl(sym, fresh));
       const parsed = this.parseYahooChart(data);
       if (!parsed || !this.isValidPrice(key, parsed.price)) return null;
       return {
         price: parsed.price,
-        change: parsed.change,
+        change: this.resolveChange(key, parsed.price, parsed.change),
         unit: this.assetUnit(key),
       };
     } catch (e) {
@@ -142,20 +161,45 @@ const LexoraAPI = {
     }
   },
 
-  async fetchYahoo(key) {
+  async fetchYahoo(key, fresh = false) {
     const symbols = [...new Set([this.YAHOO[key], ...(this.YAHOO_ALT[key] || [])].filter(Boolean))];
     for (const sym of symbols) {
-      const hit = await this.fetchYahooSymbol(sym, key);
+      const hit = await this.fetchYahooSymbol(sym, key, fresh);
       if (hit) return hit;
     }
     return null;
+  },
+
+  /** Single-asset instant refresh */
+  async fetchAssetLive(key) {
+    if (key === "gold") {
+      const api = await this.fetchGoldApiSpot();
+      if (api) {
+        api.change = this.resolveChange(key, api.price, api.change);
+        return api;
+      }
+    }
+    if (key === "bitcoin" || key === "ethereum") {
+      const c = await this.fetchCrypto();
+      const hit = c[key];
+      if (hit) {
+        return {
+          price: hit.price,
+          change: this.resolveChange(key, hit.price, hit.change),
+          unit: "unit",
+        };
+      }
+    }
+    return this.fetchYahoo(key, true);
   },
 
   async fetchGoldApiSpot() {
     try {
       const data = await this.fetchWithProxies("https://api.gold-api.com/price/XAU");
       const p = Number(data?.price ?? data?.items?.[0]?.xauPrice);
-      if (this.isValidPrice("gold", p)) return { price: p, change: 0, unit: "oz" };
+      if (this.isValidPrice("gold", p)) {
+        return { price: p, change: this.resolveChange("gold", p, 0), unit: "oz" };
+      }
     } catch (e) { /* */ }
     return null;
   },
@@ -291,32 +335,26 @@ const LexoraAPI = {
     ]);
     await this.fetchFxRates();
 
-    Object.entries(metals).forEach(([key, y]) => {
+    const putAsset = (key, y) => {
+      if (!y || !this.isValidPrice(key, y.price)) return;
       assets[key] = {
         price: y.price,
-        change: y.change,
+        change: this.resolveChange(key, y.price, y.change),
         symbol: key.toUpperCase(),
-        unit: y.unit,
+        unit: y.unit || this.assetUnit(key),
         updated: Date.now(),
       };
-    });
+    };
+
+    Object.entries(metals).forEach(([key, y]) => putAsset(key, y));
 
     stocks.forEach(([key, y]) => {
-      if (y) {
-        assets[key] = {
-          price: y.price,
-          change: y.change,
-          symbol: key.toUpperCase(),
-          unit: y.unit || "unit",
-          updated: Date.now(),
-        };
-      }
+      if (y) putAsset(key, y);
     });
 
     Object.entries(crypto).forEach(([k, v]) => {
-      if (!assets[k] || Math.abs((assets[k].change || 0)) < Math.abs(v.change || 0)) {
-        assets[k] = { price: v.price, change: v.change, symbol: k.toUpperCase().slice(0, 3), unit: "unit" };
-      }
+      if (!assets[k]) putAsset(k, v);
+      else if (Math.abs(v.change || 0) >= Math.abs(assets[k].change || 0)) putAsset(k, v);
     });
 
     if (forex.usd_inr) assets.usd_inr = { price: forex.usd_inr, change: 0, symbol: "USD/INR", unit: "rate" };
@@ -337,7 +375,7 @@ const LexoraAPI = {
     });
 
     const source = liveCount >= 10 ? "live" : liveCount >= 6 ? "mixed" : "fallback";
-    return { timestamp: new Date().toISOString(), source, assets, refreshSec: 8 };
+    return { timestamp: new Date().toISOString(), source, assets, refreshSec: 5 };
   },
 
   formatPrice(sym, priceUsd, currency) {
@@ -413,16 +451,21 @@ const LexoraAPI = {
     return prices.map((p) => ((p - base) / base) * 100);
   },
 
-  async predict(symbol) {
+  async predict(symbol, market) {
     if (this.isLocalFlask()) {
       try {
-        const r = await fetch(`/api/predict/${symbol}`);
+        const r = await fetch(this.cacheBust(`/api/predict/${symbol}`));
         const j = await r.json();
         if (j.success) return j.data;
       } catch (e) { /* */ }
     }
+    const live = market?.assets?.[symbol];
     const prices = await this.history(symbol, 40);
-    const current = prices[prices.length - 1];
+    let current = prices[prices.length - 1];
+    if (live?.price && this.isValidPrice(symbol, live.price)) {
+      current = Number(live.price);
+      prices[prices.length - 1] = current;
+    }
     const rsi = this.rsi(prices);
     const ma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / 5;
     const ma20 = prices.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, prices.length);
@@ -451,21 +494,22 @@ const LexoraAPI = {
     };
   },
 
-  async predictAll() {
+  async predictAll(market) {
     if (this.isLocalFlask()) {
       try {
-        const r = await fetch("/api/predictions/all");
+        const r = await fetch(this.cacheBust("/api/predictions/all"));
         const j = await r.json();
         if (j.success) return j.data;
       } catch (e) { /* */ }
     }
+    const m = market || (typeof LexoraApp !== "undefined" ? LexoraApp.market : null);
     const syms = [
       "gold", "silver", "platinum", "palladium", "copper",
       "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq",
       "usd_inr", "eur_usd", "gbp_usd",
     ];
     const out = {};
-    for (const s of syms) out[s] = await this.predict(s);
+    for (const s of syms) out[s] = await this.predict(s, m);
     return out;
   },
 
