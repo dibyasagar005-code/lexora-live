@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Calculators - LexorA{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>Investment Calculators</h2>
+    <p>Gold · SIP · Crypto · EMI · Compound Interest</p>
+</section>
+
+<div class="calc-tabs">
+    <button class="tab active" data-calc="sip">SIP</button>
+    <button class="tab" data-calc="gold">Gold</button>
+    <button class="tab" data-calc="crypto">Crypto Profit</button>
+    <button class="tab" data-calc="emi">EMI</button>
+    <button class="tab" data-calc="compound">Compound Interest</button>
+</div>
+
+<div class="calc-panels">
+    <div class="calc-panel glass active" id="calc-sip">
+        <h4>SIP Calculator</h4>
+        <form class="calc-form" data-type="sip">
+            <div class="form-group"><label>Monthly Investment ($)</label><input type="number" name="monthly" value="5000"></div>
+            <div class="form-group"><label>Expected Return (% p.a.)</label><input type="number" name="rate" value="12"></div>
+            <div class="form-group"><label>Duration (years)</label><input type="number" name="years" value="10"></div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
+        <div class="calc-result" id="result-sip"></div>
+    </div>
+    <div class="calc-panel glass" id="calc-gold">
+        <h4>Gold Investment Calculator</h4>
+        <form class="calc-form" data-type="gold">
+            <div class="form-group"><label>Gold (grams)</label><input type="number" name="grams" value="10"></div>
+            <div class="form-group"><label>Price per gram ($)</label><input type="number" name="price" value="65"></div>
+            <div class="form-group"><label>Years</label><input type="number" name="years" value="5"></div>
+            <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="8"></div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
+        <div class="calc-result" id="result-gold"></div>
+    </div>
+    <div class="calc-panel glass" id="calc-crypto">
+        <h4>Crypto Profit Calculator</h4>
+        <form class="calc-form" data-type="crypto">
+            <div class="form-group"><label>Buy Price ($)</label><input type="number" name="buy_price" value="50000"></div>
+            <div class="form-group"><label>Sell Price ($)</label><input type="number" name="sell_price" value="65000"></div>
+            <div class="form-group"><label>Quantity</label><input type="number" name="quantity" value="1" step="0.0001"></div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
+        <div class="calc-result" id="result-crypto"></div>
+    </div>
+    <div class="calc-panel glass" id="calc-emi">
+        <h4>EMI Calculator</h4>
+        <form class="calc-form" data-type="emi">
+            <div class="form-group"><label>Loan Amount ($)</label><input type="number" name="principal" value="1000000"></div>
+            <div class="form-group"><label>Interest Rate (% p.a.)</label><input type="number" name="rate" value="8.5"></div>
+            <div class="form-group"><label>Tenure (months)</label><input type="number" name="tenure" value="240"></div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
+        <div class="calc-result" id="result-emi"></div>
+    </div>
+    <div class="calc-panel glass" id="calc-compound">
+        <h4>Compound Interest Calculator</h4>
+        <form class="calc-form" data-type="compound">
+            <div class="form-group"><label>Principal ($)</label><input type="number" name="principal" value="100000"></div>
+            <div class="form-group"><label>Rate (% p.a.)</label><input type="number" name="rate" value="10"></div>
+            <div class="form-group"><label>Years</label><input type="number" name="years" value="10"></div>
+            <div class="form-group"><label>Compounding (per year)</label><input type="number" name="frequency" value="4"></div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+        </form>
+        <div class="calc-result" id="result-compound"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => LexoraApp.initCalculators());
+</script>
+{% endblock %}

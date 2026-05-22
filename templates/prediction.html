@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}AI Prediction - {{ symbol|title }} - LexorA{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>AI Prediction Engine</h2>
+    <div class="symbol-selector">
+        {% for s in ['gold','silver','bitcoin','ethereum','crude_oil','platinum','sp500','usd_inr'] %}
+        <a href="{{ url_for('prediction', symbol=s) }}" class="symbol-chip {% if symbol == s %}active{% endif %}">{{ s|replace('_',' ')|title }}</a>
+        {% endfor %}
+    </div>
+</section>
+
+<div class="prediction-hero glass">
+    <div class="pred-main">
+        <h3>{{ symbol|replace('_', ' ')|title }}</h3>
+        <div class="current-price">${{ "%.2f"|format(prediction.current_price) }}</div>
+        <div class="signal-large signal-{{ prediction.signal|lower }}">{{ prediction.signal }}</div>
+        <div class="confidence-bar">
+            <div class="confidence-fill" style="width: {{ prediction.confidence }}%"></div>
+        </div>
+        <span class="confidence-text">{{ prediction.confidence }}% Confidence</span>
+    </div>
+    <div class="pred-metrics">
+        <div class="metric"><label>Expected Price</label><span>${{ "%.2f"|format(prediction.expected_price) }}</span></div>
+        <div class="metric"><label>Trend</label><span class="trend-{{ prediction.trend }}">{{ prediction.trend|title }}</span></div>
+        <div class="metric"><label>RSI</label><span>{{ prediction.rsi }}</span></div>
+        <div class="metric"><label>Volatility</label><span>{{ prediction.volatility }}%</span></div>
+        <div class="metric"><label>Sentiment</label><span>{{ prediction.sentiment.label }}</span></div>
+        <div class="metric"><label>Recommendation</label><span class="rec-{{ prediction.recommendation|lower }}">{{ prediction.recommendation }}</span></div>
+    </div>
+</div>
+
+<div class="risk-meter-wrap glass">
+    <h4>Risk Meter</h4>
+    <div class="risk-meter">
+        <div class="risk-fill" id="riskFill" style="width: {{ prediction.risk_level }}%"></div>
+    </div>
+    <span>Risk Level: {{ prediction.risk_level }}%</span>
+    <p class="rec-reason">{{ prediction.recommendation_reason }}</p>
+</div>
+
+<div class="chart-row">
+    <div class="chart-card glass">
+        <h4>Historical Price</h4>
+        <canvas id="historyChart" data-prices="{{ prediction.historical|join(',') }}"></canvas>
+    </div>
+    <div class="chart-card glass">
+        <h4>AI Forecast (5 periods)</h4>
+        <canvas id="forecastChart" data-historical="{{ prediction.historical|join(',') }}" data-forecast="{{ prediction.forecast|join(',') }}"></canvas>
+    </div>
+</div>
+
+<div class="chart-card glass mt-4">
+    <h4>Candlestick Simulation</h4>
+    <canvas id="candlestickChart"></canvas>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const symbol = '{{ symbol }}';
+    document.addEventListener('DOMContentLoaded', () => {
+        const hist = document.getElementById('historyChart').dataset.prices.split(',').map(Number);
+        const fc = document.getElementById('forecastChart');
+        const historical = fc.dataset.historical.split(',').map(Number);
+        const forecast = fc.dataset.forecast.split(',').map(Number);
+        LexoraCharts.initHistoryChart('historyChart', hist);
+        LexoraCharts.initForecastChart('forecastChart', historical, forecast);
+        LexoraCharts.initCandlestickChart('candlestickChart', symbol);
+    });
+</script>
+{% endblock %}

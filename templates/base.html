@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LexorA AI Market Predictor{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Live news ticker -->
+    <div class="news-ticker" id="newsTicker">
+        <span class="ticker-label">LIVE</span>
+        <div class="ticker-content" id="tickerContent">Loading market news...</div>
+    </div>
+
+    <div class="app-layout">
+        <!-- Sidebar navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="logo-icon">◈</div>
+                <div>
+                    <h1>LexorA</h1>
+                    <span class="tagline">AI Market Predictor</span>
+                </div>
+            </div>
+            <div class="live-status">
+                <span class="status-dot"></span>
+                <span>Market Live</span>
+                <small id="lastUpdate">--</small>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                    <span class="nav-icon">⌂</span> Home
+                </a>
+                <a href="{{ url_for('markets') }}" class="nav-link {% if request.endpoint == 'markets' %}active{% endif %}">
+                    <span class="nav-icon">◉</span> Live Markets
+                </a>
+                <a href="{{ url_for('prediction') }}" class="nav-link {% if request.endpoint == 'prediction' %}active{% endif %}">
+                    <span class="nav-icon">◎</span> AI Prediction
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <span class="nav-icon">▣</span> Dashboard
+                </a>
+                <a href="{{ url_for('history') }}" class="nav-link {% if request.endpoint == 'history' %}active{% endif %}">
+                    <span class="nav-icon">◷</span> History
+                </a>
+                <a href="{{ url_for('calculator') }}" class="nav-link {% if request.endpoint == 'calculator' %}active{% endif %}">
+                    <span class="nav-icon">⊕</span> Calculator
+                </a>
+                <a href="{{ url_for('watchlist_page') }}" class="nav-link {% if request.endpoint == 'watchlist_page' %}active{% endif %}">
+                    <span class="nav-icon">★</span> Watchlist
+                </a>
+                <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
+                    <span class="nav-icon">⚙</span> Settings
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                {% if user %}
+                <div class="user-badge">{{ user }}</div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline btn-sm">Logout</a>
+                {% else %}
+                <a href="{{ url_for('login') }}" class="btn btn-primary btn-sm">Login</a>
+                {% endif %}
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main-content">
+            <button class="mobile-menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='charts.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

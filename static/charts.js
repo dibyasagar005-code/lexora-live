@@ -121,7 +121,7 @@ const LexoraCharts = {
         const ctx = document.getElementById(canvasId)?.getContext('2d');
         if (!ctx) return;
         try {
-            const market = LexoraApp?.market || LexoraLiveData?.loadCache() || await LexoraLiveData.fetchMarket();
+            const market = LexoraApp?.market || await LexoraAPI.fetchMarket();
             const assets = Object.entries(market.assets || {}).slice(0, 6);
             const maxPrices = assets.map(([, a]) => a.price);
             const normalized = maxPrices.map(p => (p / Math.max(...maxPrices)) * 100);
@@ -150,12 +150,12 @@ const LexoraCharts = {
         const ctx = document.getElementById(canvasId)?.getContext('2d');
         if (!ctx) return;
         try {
-            const market = LexoraApp?.market || await LexoraLiveData.fetchMarket();
+            const data = await LexoraAPI.predictAll();
             const labels = [];
             const values = [];
-            Object.entries(market.assets || {}).slice(0, 8).forEach(([sym, a]) => {
+            Object.entries(data).slice(0, 8).forEach(([sym, p]) => {
                 labels.push(sym.replace('_', ' '));
-                values.push(Math.abs(a.change || 0) * 3 + 5);
+                values.push(p.volatility || 10);
             });
             this._destroy(canvasId);
             this._instances[canvasId] = new Chart(ctx, {
@@ -185,9 +185,7 @@ const LexoraCharts = {
         const colors = ['#00f0ff', '#ffd700', '#00ff88'];
         for (let i = 0; i < symbols.length; i++) {
             try {
-                const res = await fetch(`/api/history/${symbols[i]}`);
-                const data = await res.json();
-                const prices = data.historical || [];
+                const prices = await LexoraAPI.history(symbols[i], 30);
                 datasets.push({
                     label: symbols[i].toUpperCase(),
                     data: prices,
@@ -199,7 +197,7 @@ const LexoraCharts = {
         }
         if (!datasets.length) return;
         this._destroy(canvasId);
-        const maxLen = Math.max(...datasets.map(d => d.data.length));
+        const maxLen = Math.max(...datasets.map((d) => d.data.length));
         this._instances[canvasId] = new Chart(ctx, {
             type: 'line',
             data: {

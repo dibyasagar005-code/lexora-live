@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Home - LexorA AI Market Predictor{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>AI Investment Intelligence</h2>
+    <p>Real-time predictions across Gold, Crypto, Forex, Stocks & Commodities</p>
+</section>
+
+<div class="hero-grid">
+    <div class="hero-card glass">
+        <h3>Market Pulse</h3>
+        <div class="pulse-indicator" id="marketPulse">
+            <span class="pulse-ring"></span>
+            <span class="pulse-text">Analyzing...</span>
+        </div>
+        <p class="hero-stat" id="assetCount">{{ market.assets|length if market else 0 }} assets tracked</p>
+    </div>
+    <div class="hero-card glass accent">
+        <h3>AI Engine</h3>
+        <p>RSI · Moving Average · Linear Regression · Volatility Analysis</p>
+        <a href="{{ url_for('prediction') }}" class="btn btn-primary">Run Predictions →</a>
+    </div>
+    <div class="hero-card glass">
+        <h3>Data Curation</h3>
+        <p>Auto-collect · Clean · Normalize · Store to SQLite</p>
+        <button class="btn btn-outline btn-sm" id="btnCurate">Curate Now</button>
+    </div>
+</div>
+
+<section class="section">
+    <h3 class="section-title">Live Market Overview</h3>
+    <div class="market-grid" id="homeMarketGrid">
+        {% if market and market.assets %}
+        {% for symbol, asset in market.assets.items() %}
+        <div class="market-card" data-symbol="{{ symbol }}">
+            <div class="card-header">
+                <span class="symbol-name">{{ symbol|replace('_', ' ')|title }}</span>
+                <span class="live-dot"></span>
+            </div>
+            <div class="card-price">${{ "%.2f"|format(asset.price) if asset.price < 10000 else "%.0f"|format(asset.price) }}</div>
+            <div class="card-change {% if asset.change >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "%+.2f"|format(asset.change) }}%
+            </div>
+            <a href="{{ url_for('prediction', symbol=symbol) }}" class="card-link">Predict →</a>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+</section>
+
+<section class="section">
+    <h3 class="section-title">Quick AI Signals</h3>
+    <div class="signals-grid" id="quickSignals">
+        <div class="loading-spinner">Loading AI predictions...</div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="chart-row">
+        <div class="chart-card glass">
+            <h4>Market Comparison</h4>
+            <canvas id="comparisonChart"></canvas>
+        </div>
+        <div class="chart-card glass">
+            <h4>Volatility Index</h4>
+            <canvas id="volatilityChart"></canvas>
+        </div>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        LexoraCharts.initComparisonChart('comparisonChart');
+        LexoraCharts.initVolatilityChart('volatilityChart');
+        LexoraApp.loadQuickSignals();
+        document.getElementById('btnCurate')?.addEventListener('click', () => LexoraApp.runCuration());
+    });
+</script>
+{% endblock %}
