@@ -76,9 +76,18 @@ const LexoraAPI = {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), this.TIMEOUT);
     try {
-      const r = await fetch(url, { signal: ctrl.signal });
+      const r = await fetch(url, {
+        signal: ctrl.signal,
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
       if (!r.ok) throw new Error(String(r.status));
-      return await r.json();
+      const text = await r.text();
+      let data = JSON.parse(text);
+      if (data && typeof data.contents === "string") {
+        data = JSON.parse(data.contents);
+      }
+      return data;
     } finally {
       clearTimeout(t);
     }
@@ -99,18 +108,54 @@ const LexoraAPI = {
   },
 
   async fetchWithProxies(path) {
-    const busted = this.cacheBust(path);
     const urls = [
-      busted,
+      this.cacheBust(path),
       this.cacheBust("https://corsproxy.io/?" + encodeURIComponent(path)),
       this.cacheBust("https://api.allorigins.win/raw?url=" + encodeURIComponent(path)),
+      this.cacheBust("https://api.allorigins.win/get?url=" + encodeURIComponent(path)),
     ];
+    let lastErr;
     for (const url of urls) {
       try {
         return await this.fetchJson(url);
-      } catch (e) { /* next */ }
+      } catch (e) {
+        lastErr = e;
+      }
     }
-    throw new Error("All proxies failed");
+    throw lastErr || new Error("All proxies failed");
+  },
+
+  /** Gold + silver spot from global feed (works when Yahoo blocked) */
+  async fetchGoldPriceOrg() {
+    const out = {};
+    try {
+      const data = await this.fetchWithProxies("https://data-asg.goldprice.org/dbXRates/USD");
+      const item = (Array.isArray(data?.items) ? data.items[0] : null) || data;
+      if (!item) return out;
+      if (item.xauPrice && this.isValidPrice("gold", item.xauPrice)) {
+        out.gold = {
+          price: Number(item.xauPrice),
+          change: Number(item.chgXau || item.chgXAU || 0),
+          unit: "oz",
+          source: "goldprice.org",
+        };
+      }
+      if (item.xagPrice && this.isValidPrice("silver", item.xagPrice)) {
+        out.silver = {
+          price: Number(item.xagPrice),
+          change: Number(item.chgXag || item.chgXAG || 0),
+          unit: "oz",
+          source: "goldprice.org",
+        };
+      }
+      const xpt = item.xptPrice || item.xpt;
+      if (xpt && this.isValidPrice("platinum", xpt)) {
+        out.platinum = { price: Number(xpt), change: 0, unit: "oz", source: "goldprice.org" };
+      }
+    } catch (e) {
+      console.warn("[LexorA] goldprice.org:", e.message);
+    }
+    return out;
   },
 
   yahooChartUrl(symbol, fresh = false) {
@@ -172,6 +217,14 @@ const LexoraAPI = {
 
   /** Single-asset instant refresh */
   async fetchAssetLive(key) {
+    if (key === "gold" || key === "silver" || key === "platinum") {
+      const org = await this.fetchGoldPriceOrg();
+      if (org[key]) {
+        const hit = org[key];
+        hit.change = this.resolveChange(key, hit.price, hit.change);
+        return hit;
+      }
+    }
     if (key === "gold") {
       const api = await this.fetchGoldApiSpot();
       if (api) {
@@ -193,30 +246,83 @@ const LexoraAPI = {
     return this.fetchYahoo(key, true);
   },
 
-  async fetchGoldApiSpot() {
-    try {
-      const data = await this.fetchWithProxies("https://api.gold-api.com/price/XAU");
-      const p = Number(data?.price ?? data?.items?.[0]?.xauPrice);
-      if (this.isValidPrice("gold", p)) {
-        return { price: p, change: this.resolveChange("gold", p, 0), unit: "oz" };
+  async fetchGoldApiMetal(metal, key) {
+    const path = `https://api.gold-api.com/price/${metal}`;
+    const loaders = [
+      () => this.fetchJson(this.cacheBust(path)),
+      () => this.fetchWithProxies(path),
+    ];
+    for (const load of loaders) {
+      try {
+        const data = await load();
+        const p = Number(data?.price ?? data?.metalPrice ?? data?.value);
+        if (this.isValidPrice(key, p)) {
+          return {
+            price: p,
+            change: Number(data?.chg || data?.change || 0),
+            unit: "oz",
+            source: "gold-api.com",
+          };
+        }
+      } catch (e) {
+        /* try next */
       }
-    } catch (e) { /* */ }
+    }
     return null;
   },
 
+  async fetchGoldApiSpot() {
+    return this.fetchGoldApiMetal("XAU", "gold");
+  },
+
+  async fetchCryptoBinance() {
+    const out = {};
+    const pairs = { bitcoin: "BTCUSDT", ethereum: "ETHUSDT" };
+    await Promise.all(
+      Object.entries(pairs).map(async ([key, sym]) => {
+        try {
+          const d = await this.fetchJson(
+            this.cacheBust(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`)
+          );
+          const p = Number(d.lastPrice);
+          if (this.isValidPrice(key, p)) {
+            out[key] = {
+              price: p,
+              change: Number(d.priceChangePercent) || 0,
+              unit: "unit",
+              source: "binance",
+            };
+          }
+        } catch (e) {
+          console.warn("[LexorA] binance", sym, e.message);
+        }
+      })
+    );
+    return out;
+  },
+
   async fetchMetal(key) {
-    if (key === "gold") {
-      const api = await this.fetchGoldApiSpot();
-      if (api) return api;
+    const tries = [];
+    if (key === "gold") tries.push(() => this.fetchGoldApiSpot());
+    if (key === "silver") tries.push(() => this.fetchGoldApiMetal("XAG", "silver"));
+    tries.push(() => this.fetchYahoo(key, true));
+    for (const fn of tries) {
+      const hit = await fn();
+      if (hit && this.isValidPrice(key, hit.price)) return hit;
     }
-    return this.fetchYahoo(key);
+    return null;
   },
 
   async fetchMetalsBundle() {
-    const keys = ["gold", "silver", "platinum", "palladium", "copper"];
     const out = {};
+    const org = await this.fetchGoldPriceOrg();
+    Object.entries(org).forEach(([k, v]) => {
+      out[k] = v;
+    });
+    const keys = ["gold", "silver", "platinum", "palladium", "copper"];
     await Promise.all(
       keys.map(async (k) => {
+        if (out[k] && this.isValidPrice(k, out[k].price)) return;
         const y = await this.fetchMetal(k);
         if (y) out[k] = y;
       })
@@ -238,20 +344,43 @@ const LexoraAPI = {
   },
 
   async fetchCrypto() {
+    const binance = await this.fetchCryptoBinance();
+    if (binance.bitcoin && binance.ethereum) return binance;
+
     const path =
       "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true";
-    let data;
+    let data = {};
     try {
-      data = await this.fetchWithProxies(path);
+      data = await this.fetchJson(this.cacheBust(path));
     } catch (e) {
-      return {};
+      try {
+        data = await this.fetchWithProxies(path);
+      } catch (e2) {
+        data = {};
+      }
     }
-    const out = {};
-    if (data.bitcoin) {
-      out.bitcoin = { price: data.bitcoin.usd, change: data.bitcoin.usd_24h_change || 0, unit: "unit" };
+    const out = { ...binance };
+    if (data.bitcoin && !out.bitcoin) {
+      out.bitcoin = {
+        price: data.bitcoin.usd,
+        change: data.bitcoin.usd_24h_change || 0,
+        unit: "unit",
+        source: "coingecko",
+      };
     }
-    if (data.ethereum) {
-      out.ethereum = { price: data.ethereum.usd, change: data.ethereum.usd_24h_change || 0, unit: "unit" };
+    if (data.ethereum && !out.ethereum) {
+      out.ethereum = {
+        price: data.ethereum.usd,
+        change: data.ethereum.usd_24h_change || 0,
+        unit: "unit",
+        source: "coingecko",
+      };
+    }
+    for (const key of ["bitcoin", "ethereum"]) {
+      if (!out[key]) {
+        const y = await this.fetchYahoo(key, true);
+        if (y) out[key] = { ...y, source: "yahoo" };
+      }
     }
     return out;
   },
@@ -292,7 +421,9 @@ const LexoraAPI = {
 
   async fetchForex() {
     try {
-      const data = await this.fetchWithProxies("https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP");
+      const data = await this.fetchJson(
+        this.cacheBust("https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP")
+      );
       const r = data.rates || {};
       return {
         usd_inr: r.INR,
@@ -317,25 +448,28 @@ const LexoraAPI = {
   },
 
   /** Main market fetch — Yahoo + CoinGecko + Frankfurter */
-  async fetchMarket() {
+  async fetchMarket(force = false) {
     if (this.isLocalFlask()) {
       try {
-        const r = await fetch("/api/market");
+        const url = force ? "/api/market?fresh=1" : "/api/market";
+        const r = await fetch(this.cacheBust(url), { cache: "no-store" });
         if (r.ok) return await r.json();
-      } catch (e) { /* client fallback */ }
+      } catch (e) {
+        console.warn("[LexorA] Flask /api/market:", e.message);
+      }
     }
 
     const assets = {};
-    const stockKeys = ["sp500", "nasdaq", "crude_oil", "bitcoin", "ethereum"];
+    const stockKeys = ["sp500", "nasdaq", "crude_oil"];
     const [metals, crypto, forex, stocks] = await Promise.all([
       this.fetchMetalsBundle(),
       this.fetchCrypto().catch(() => ({})),
       this.fetchForex().catch(() => ({})),
-      Promise.all(stockKeys.map(async (key) => [key, await this.fetchYahoo(key)])),
+      Promise.all(stockKeys.map(async (key) => [key, await this.fetchYahoo(key, true)])),
     ]);
     await this.fetchFxRates();
 
-    const putAsset = (key, y) => {
+    const putAsset = (key, y, isLive = true) => {
       if (!y || !this.isValidPrice(key, y.price)) return;
       assets[key] = {
         price: y.price,
@@ -343,39 +477,51 @@ const LexoraAPI = {
         symbol: key.toUpperCase(),
         unit: y.unit || this.assetUnit(key),
         updated: Date.now(),
+        live: isLive,
+        apiSource: y.source || (isLive ? "live" : "fallback"),
       };
     };
 
-    Object.entries(metals).forEach(([key, y]) => putAsset(key, y));
+    Object.entries(metals).forEach(([key, y]) => putAsset(key, y, true));
 
     stocks.forEach(([key, y]) => {
-      if (y) putAsset(key, y);
+      if (y) putAsset(key, y, true);
     });
 
     Object.entries(crypto).forEach(([k, v]) => {
-      if (!assets[k]) putAsset(k, v);
-      else if (Math.abs(v.change || 0) >= Math.abs(assets[k].change || 0)) putAsset(k, v);
+      if (!assets[k]) putAsset(k, v, true);
+      else if (Math.abs(v.change || 0) >= Math.abs(assets[k].change || 0)) putAsset(k, v, true);
     });
 
-    if (forex.usd_inr) assets.usd_inr = { price: forex.usd_inr, change: 0, symbol: "USD/INR", unit: "rate" };
-    if (forex.eur_usd) assets.eur_usd = { price: forex.eur_usd, change: 0, symbol: "EUR/USD", unit: "rate" };
-    if (forex.gbp_usd) assets.gbp_usd = { price: forex.gbp_usd, change: 0, symbol: "GBP/USD", unit: "rate" };
+    if (forex.usd_inr) {
+      putAsset("usd_inr", { price: forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" }, true);
+    }
+    if (forex.eur_usd) {
+      putAsset("eur_usd", { price: forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" }, true);
+    }
+    if (forex.gbp_usd) {
+      putAsset("gbp_usd", { price: forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" }, true);
+    }
 
-    let liveCount = Object.keys(assets).length;
+    let liveCount = Object.values(assets).filter((a) => a.live).length;
     Object.keys(this.FALLBACK).forEach((sym) => {
       if (!assets[sym] || !this.isValidPrice(sym, assets[sym].price)) {
-        assets[sym] = {
-          price: this.FALLBACK[sym],
-          change: assets[sym]?.change || 0,
-          symbol: sym.toUpperCase(),
-          unit: this.assetUnit(sym),
-          updated: Date.now(),
-        };
+        putAsset(
+          sym,
+          {
+            price: this.FALLBACK[sym],
+            change: 0,
+            unit: this.assetUnit(sym),
+            source: "offline-estimate",
+          },
+          false
+        );
       }
     });
 
-    const source = liveCount >= 10 ? "live" : liveCount >= 6 ? "mixed" : "fallback";
-    return { timestamp: new Date().toISOString(), source, assets, refreshSec: 5 };
+    liveCount = Object.values(assets).filter((a) => a.live).length;
+    const source = liveCount >= 10 ? "live" : liveCount >= 5 ? "mixed" : "offline";
+    return { timestamp: new Date().toISOString(), source, assets, refreshSec: 5, liveCount };
   },
 
   formatPrice(sym, priceUsd, currency) {

@@ -124,11 +124,16 @@ const LexoraApp = {
     if (badge) badge.textContent = `LIVE · ${txt}`;
   },
 
-  async refreshMarketData() {
+  async refreshMarketData(force = false) {
     const pulse = document.querySelector(".pulse-text");
+    const grid = document.getElementById("homeMarketGrid");
+    if (grid) {
+      grid.classList.add("market-loading");
+      if (!grid.classList.contains("market-grid")) grid.classList.add("market-grid");
+    }
     if (pulse) pulse.textContent = "Updating live data…";
     try {
-      this.market = await LexoraAPI.fetchMarket();
+      this.market = await LexoraAPI.fetchMarket(force);
       this.lastMarketFetch = Date.now();
       if (this.market?.assets?.usd_inr?.price) {
         this.usdInrRate = this.market.assets.usd_inr.price;
@@ -139,7 +144,15 @@ const LexoraApp = {
       this.tickRefreshLabel();
       const src = document.getElementById("dataSource");
       if (src) src.textContent = this.market.source.toUpperCase() + " · 5s instant";
-      if (pulse) pulse.textContent = this.market.source === "live" ? "● INSTANT LIVE" : "● Mixed feed";
+      const liveN = this.market.liveCount ?? Object.values(this.market.assets || {}).filter((a) => a.live).length;
+      if (pulse) {
+        pulse.textContent =
+          this.market.source === "live"
+            ? `● INSTANT LIVE (${liveN} feeds)`
+            : this.market.source === "mixed"
+              ? `● LIVE (${liveN}/${Object.keys(this.market.assets).length})`
+              : "● OFFLINE — check network";
+      }
       if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       if (this.currentPage === "prediction") this.loadPrediction(this.activePrediction);
@@ -149,6 +162,8 @@ const LexoraApp = {
     } catch (e) {
       if (pulse) pulse.textContent = "Retry…";
       console.error(e);
+    } finally {
+      if (grid) grid.classList.remove("market-loading");
     }
   },
 
@@ -190,6 +205,12 @@ const LexoraApp = {
           const ch = asset.change || 0;
           changeEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "% live";
           changeEl.className = "card-change " + (ch >= 0 ? "positive" : "negative");
+        }
+        const spotEl = card.querySelector(".card-spot");
+        if (spotEl) {
+          const isLive = asset.live !== false;
+          spotEl.textContent = isLive ? "LIVE" : "OFFLINE";
+          spotEl.className = "card-spot " + (isLive ? "spot-live" : "spot-offline");
         }
       });
     });

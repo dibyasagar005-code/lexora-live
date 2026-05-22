@@ -107,12 +107,88 @@ def fetch_yahoo_asset(key):
     return None
 
 
+def fetch_goldprice_org():
+    """Global gold/silver spot (USD per troy oz)."""
+    out = {}
+    result = _safe_request("https://data-asg.goldprice.org/dbXRates/USD")
+    if not result:
+        return out
+    item = (result.get("items") or [None])[0] or result
+    if item.get("xauPrice") and _valid_price("gold", item["xauPrice"]):
+        out["gold"] = {
+            "price": float(item["xauPrice"]),
+            "change": float(item.get("chgXau") or item.get("chgXAU") or 0),
+            "symbol": "GOLD",
+            "unit": "oz",
+            "live": True,
+            "apiSource": "goldprice.org",
+        }
+    if item.get("xagPrice") and _valid_price("silver", item["xagPrice"]):
+        out["silver"] = {
+            "price": float(item["xagPrice"]),
+            "change": float(item.get("chgXag") or item.get("chgXAG") or 0),
+            "symbol": "SILVER",
+            "unit": "oz",
+            "live": True,
+            "apiSource": "goldprice.org",
+        }
+    return out
+
+
+def fetch_gold_api_spot(metal="XAU", key="gold"):
+    result = _safe_request(f"https://api.gold-api.com/price/{metal}")
+    if not result:
+        return None
+    price = float(result.get("price") or result.get("metalPrice") or 0)
+    if not _valid_price(key, price):
+        return None
+    return {
+        "price": price,
+        "change": float(result.get("chg") or result.get("change") or 0),
+        "symbol": key.upper(),
+        "unit": "oz",
+        "live": True,
+        "apiSource": "gold-api.com",
+    }
+
+
 def fetch_yahoo_assets():
-    data = {}
+    data = fetch_goldprice_org()
     for key in YAHOO_TICKERS:
+        if key in data and _valid_price(key, data[key]["price"]):
+            continue
         row = fetch_yahoo_asset(key)
         if row:
+            row["live"] = True
+            row["apiSource"] = "yahoo"
             data[key] = row
+    if "gold" not in data:
+        api_gold = fetch_gold_api_spot("XAU", "gold")
+        if api_gold:
+            data["gold"] = api_gold
+    if "silver" not in data:
+        api_silver = fetch_gold_api_spot("XAG", "silver")
+        if api_silver:
+            data["silver"] = api_silver
+    return data
+
+
+def fetch_crypto_binance():
+    data = {}
+    pairs = {"bitcoin": "BTCUSDT", "ethereum": "ETHUSDT"}
+    for key, sym in pairs.items():
+        result = _safe_request(f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}")
+        if not result:
+            continue
+        price = float(result.get("lastPrice", 0))
+        if _valid_price(key, price):
+            data[key] = {
+                "price": price,
+                "change": float(result.get("priceChangePercent", 0)),
+                "unit": "unit",
+                "live": True,
+                "apiSource": "binance",
+            }
     return data
 
 
@@ -132,12 +208,16 @@ def fetch_coingecko():
                 "price": result["bitcoin"]["usd"],
                 "change": result["bitcoin"].get("usd_24h_change", 0),
                 "unit": "unit",
+                "live": True,
+                "apiSource": "coingecko",
             }
         if "ethereum" in result:
             data["ethereum"] = {
                 "price": result["ethereum"]["usd"],
                 "change": result["ethereum"].get("usd_24h_change", 0),
                 "unit": "unit",
+                "live": True,
+                "apiSource": "coingecko",
             }
     return data
 
@@ -182,28 +262,47 @@ def fetch_market_data():
     }
 
     market["assets"].update(fetch_yahoo_assets())
-    for coin, info in fetch_coingecko().items():
+    for coin, info in fetch_crypto_binance().items():
         if _valid_price(coin, info["price"]):
             market["assets"][coin] = {
                 "price": info["price"],
                 "change": info.get("change", 0),
                 "symbol": coin.upper()[:3],
                 "unit": "unit",
+                "live": True,
+                "apiSource": info.get("apiSource", "binance"),
+            }
+    for coin, info in fetch_coingecko().items():
+        if coin in market["assets"] and market["assets"][coin].get("live"):
+            continue
+        if _valid_price(coin, info["price"]):
+            market["assets"][coin] = {
+                "price": info["price"],
+                "change": info.get("change", 0),
+                "symbol": coin.upper()[:3],
+                "unit": "unit",
+                "live": True,
+                "apiSource": "coingecko",
             }
     market["assets"].update(fetch_frankfurter())
 
-    live_count = len(market["assets"])
+    live_count = sum(1 for a in market["assets"].values() if a.get("live"))
     for symbol, price in FALLBACK_PRICES.items():
         if symbol not in market["assets"] or not _valid_price(symbol, market["assets"][symbol]["price"]):
             unit = "oz" if symbol in ("gold", "silver", "platinum", "palladium") else "lb" if symbol == "copper" else "unit"
             market["assets"][symbol] = {
                 "price": price,
-                "change": market["assets"].get(symbol, {}).get("change", 0),
+                "change": 0,
                 "symbol": symbol.upper(),
                 "unit": unit,
+                "live": False,
+                "apiSource": "offline-estimate",
             }
 
-    market["source"] = "live" if live_count >= 10 else "mixed" if live_count >= 6 else "fallback"
+    live_count = sum(1 for a in market["assets"].values() if a.get("live"))
+    market["liveCount"] = live_count
+    market["source"] = "live" if live_count >= 10 else "mixed" if live_count >= 5 else "offline"
+    market["refreshSec"] = 5
     return market
 
 

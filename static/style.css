@@ -360,6 +360,21 @@ body.menu-open { overflow: hidden; }
   border-radius: 4px;
   letter-spacing: 0.06em;
 }
+.card-spot.spot-offline {
+  color: #ff9f43;
+  background: rgba(255, 159, 67, 0.2);
+}
+.market-grid.market-loading {
+  opacity: 0.72;
+  pointer-events: none;
+}
+.price-flash {
+  animation: priceFlash 0.5s ease;
+}
+@keyframes priceFlash {
+  0% { color: var(--cyan); transform: scale(1.02); }
+  100% { color: inherit; transform: none; }
+}
 .sidebar-credit {
   position: static;
   margin-top: 10px;

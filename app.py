@@ -227,7 +227,13 @@ def settings():
 # ---------------------------------------------------------------------------
 @app.route("/api/market")
 def api_market():
-    """Live market prices JSON."""
+    """Live market prices JSON. ?fresh=1 bypasses cache for instant refresh."""
+    if request.args.get("fresh") == "1":
+        market = fetch_market_data()
+        with _cache_lock:
+            _market_cache["data"] = market
+            _market_cache["updated"] = datetime.utcnow().isoformat()
+        return jsonify(market)
     market = get_cached_market()
     return jsonify(market)
 
