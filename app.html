@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LexorA Browser</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Segoe+UI&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="browser">
+  <div class="titlebar">
+    <div class="window-controls">
+      <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+    </div>
+    <div class="titlebar-name">
+      <div class="brand-block">
+        <div class="lx-logo lx-logo--sm"><div class="lx-mark"><span class="lx-letters">LX</span></div></div>
+        <div class="lexora-name lexora-name--bar">
+          <span class="name-lexor">Lexor</span><span class="name-a">A</span>
+        </div>
+        <span class="user-pill">👤 <span class="user-name"></span></span>
+      </div>
+    </div>
+    <div class="titlebar-spacer"></div>
+  </div>
+
+  <div class="tabbar" id="tabbar"></div>
+
+  <div class="toolbar">
+    <button class="tool-btn" id="btnBack">&#8592;</button>
+    <button class="tool-btn" id="btnForward">&#8594;</button>
+    <button class="tool-btn" id="btnRefresh">&#8635;</button>
+    <div class="address-wrap">
+      <input type="text" class="address-bar" id="addressBar" readonly>
+    </div>
+    <button class="tool-btn live-badge" id="liveBadge">LIVE</button>
+  </div>
+
+  <div class="main-layout">
+    <nav class="sidebar">
+      <div class="sidebar-brand">
+        <div class="lx-logo lx-logo--md"><div class="lx-mark"><span class="lx-letters">LX</span></div></div>
+        <div class="lexora-name lexora-name--side">
+          <span class="name-lexor">Lexor</span><span class="name-a">A</span>
+        </div>
+      </div>
+      <button class="nav-item active" data-view="home"><span>&#127968;</span> <span class="lbl">Home</span></button>
+      <button class="nav-item" data-view="markets"><span>&#128200;</span> <span class="lbl">Markets</span></button>
+      <button class="nav-item" data-view="dashboard"><span>&#128202;</span> <span class="lbl">Dashboard</span></button>
+      <button class="nav-item" data-view="watchlist"><span>&#11088;</span> <span class="lbl">Watchlist</span></button>
+      <button class="nav-item" data-view="calculator"><span>&#129518;</span> <span class="lbl">Calculator</span></button>
+      <button class="nav-item" data-view="history"><span>&#128337;</span> <span class="lbl">History</span></button>
+      <button class="nav-item" data-view="settings"><span>&#9881;</span> <span class="lbl">Settings</span></button>
+      <button type="button" id="logoutBtn" class="logout-btn">Logout
+    </nav>
+
+    <main class="content">
+      <section class="view active" id="view-home">
+        <div class="hero-wrap">
+          <div class="brand-block brand-block--hero">
+            <div class="lx-logo lx-logo--lg"><div class="lx-mark"><span class="lx-letters">LX</span></div></div>
+            <div class="lexora-name lexora-name--hero">
+              <span class="name-lexor">Lexor</span><span class="name-a">A</span>
+            </div>
+          </div>
+          <div class="hero-line"></div>
+          <p class="hero-sub">Welcome <span class="user-name"></span> — Live Multi-Metal Market (Python + SQLite)</p>
+        </div>
+        <div class="cards-row" id="homeCards"></div>
+        <p class="hint">6 metals · prices saved to database every refresh</p>
+      </section>
+
+      <section class="view" id="view-markets">
+        <h2 class="view-title">Live Markets</h2>
+        <p class="view-desc">Gold, Silver, Platinum, Palladium, Copper, Aluminum — INR per gram</p>
+        <p class="status-line" id="marketStatus">Loading...</p>
+        <div class="market-grid" id="marketGrid"></div>
+        <div class="detail-panel" id="detailPanel"></div>
+      </section>
+
+      <section class="view" id="view-dashboard">
+        <h2 class="view-title">Dashboard</h2>
+        <div class="dash-stats" id="dashStats"></div>
+        <canvas id="chartCompare" height="200"></canvas>
+        <div class="rate-big" id="usdInrRate">—</div>
+      </section>
+
+      <section class="view" id="view-watchlist">
+        <h2 class="view-title">Watchlist</h2>
+        <table class="watch-table">
+          <thead><tr><th>Asset</th><th>INR/g</th><th>USD/oz</th><th>Time</th></tr></thead>
+          <tbody id="watchlistBody"></tbody>
+        </table>
+      </section>
+
+      <section class="view" id="view-calculator">
+        <h2 class="view-title">Calculator</h2>
+        <div class="calc-box">
+          <label>Metal</label>
+          <select id="calcMetal">
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+            <option value="platinum">Platinum</option>
+            <option value="palladium">Palladium</option>
+            <option value="copper">Copper</option>
+            <option value="aluminum">Aluminum</option>
+          </select>
+          <label>Grams</label>
+          <input type="number" id="calcGrams" value="10" min="0.01" step="0.01">
+          <button class="btn-primary" id="calcBtn">Calculate</button>
+          <div class="calc-result" id="calcResult">Enter grams and calculate</div>
+        </div>
+      </section>
+
+      <section class="view" id="view-history">
+        <h2 class="view-title">Price History (Database)</h2>
+        <label style="color:#94a3b8;font-size:13px">Chart metal: </label>
+        <select id="histMetal" style="margin:8px 0;padding:8px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px">
+          <option value="gold">Gold</option>
+          <option value="silver">Silver</option>
+          <option value="platinum">Platinum</option>
+          <option value="palladium">Palladium</option>
+          <option value="copper">Copper</option>
+          <option value="aluminum">Aluminum</option>
+        </select>
+        <canvas id="chartHistory" height="220"></canvas>
+        <div class="history-log" id="historyLog"></div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <h2 class="view-title">Settings</h2>
+        <div class="settings-box">
+          <label>UI refresh every (seconds)</label>
+          <input type="number" id="refreshInterval" value="30" min="10" max="300">
+          <label><input type="checkbox" id="highlightPrices" checked> Highlight price changes</label>
+          <button class="btn-primary" id="saveSettings">Save</button>
+          <p class="settings-note">Server saves all metals to SQLite in background. Internet required for live API.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="statusbar">
+    <span id="statusLeft">Ready</span>
+    <span id="statusRight">Last update: —</span>
+  </div>
+</div>
+
+
+<script src="app-public.js"></script>
+</html>

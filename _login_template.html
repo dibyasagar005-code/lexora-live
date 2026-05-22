@@ -51,21 +51,11 @@
     <div class="lx-logo"><div class="lx-mark">LX</div></div>
     <h1>Lexor<span style="color:#22d3ee">A</span></h1>
     <p class="sub">Enter your name to access live metals market</p>
-    <p class="err" id="loginErr" style="display:none"></p>
-    <form id="loginForm">
+    {% if error %}<p class="err">{{ error }}</p>{% endif %}
+    <form method="post">
       <input type="text" name="name" placeholder="Your name" required autofocus maxlength="50">
       <button type="submit" class="btn">Enter Browser</button>
     </form>
-<script>
-document.getElementById("loginForm").onsubmit = function(e) {
-  e.preventDefault();
-  const n = (this.name.value || "").trim();
-  if (n.length < 2) { document.getElementById("loginErr").style.display="block"; document.getElementById("loginErr").textContent="Enter name (min 2 chars)"; return; }
-  localStorage.setItem("lexora_user", n);
-  location.href = "app.html";
-};
-if (localStorage.getItem("lexora_user")) location.href = "app.html";
-</script>
   </div>
 </body>
 </html>
