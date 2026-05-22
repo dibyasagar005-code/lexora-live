@@ -3,69 +3,130 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — LexorA</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Segoe+UI&display=swap" rel="stylesheet">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #0a0f1a; color: #e2e8f0;
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    }
-    .card {
-      background: linear-gradient(160deg, #050816, #0b1220);
-      border: 1px solid #1e293b;
-      box-shadow: 0 0 60px rgba(0, 255, 255, 0.12);
-      border-radius: 20px; padding: 40px; width: 100%; max-width: 420px; text-align: center;
-    }
-    .lx-logo { display: inline-flex; margin-bottom: 16px; }
-    .lx-mark {
-      width: 72px; height: 72px; display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #1e293b, #0f172a);
-      border-radius: 16px; font-family: Orbitron, sans-serif; font-weight: 900; font-size: 28px;
-      background: linear-gradient(120deg, #fde047, #f8fafc, #22d3ee);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      box-shadow: 0 0 20px rgba(34, 211, 238, 0.35);
-    }
-    h1 {
-      font-family: Orbitron, sans-serif; font-size: 2rem; margin-bottom: 8px;
-      background: linear-gradient(120deg, #fde047, #f8fafc, #67e8f9);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .sub { color: #94a3b8; margin-bottom: 28px; font-size: 14px; }
-    input {
-      width: 100%; padding: 14px; border-radius: 8px; border: 1px solid #334155;
-      background: #0f172a; color: #00ffff; font-size: 16px; margin-bottom: 16px; outline: none;
-    }
-    .btn {
-      width: 100%; padding: 14px;
-      background: linear-gradient(135deg, #0891b2, #06b6d4);
-      border: none; border-radius: 8px; color: white; font-weight: bold;
-      cursor: pointer; font-size: 16px;
-    }
-    .err { color: #f87171; font-size: 13px; margin-bottom: 12px; }
-  </style>
+  <title>LexorA AI Market Predictor</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="card">
-    <div class="lx-logo"><div class="lx-mark">LX</div></div>
-    <h1>Lexor<span style="color:#22d3ee">A</span></h1>
-    <p class="sub">Enter your name to access live metals market</p>
-    <p class="err" id="loginErr" style="display:none"></p>
-    <form id="loginForm">
-      <input type="text" name="name" placeholder="Your name" required autofocus maxlength="50">
-      <button type="submit" class="btn">Enter Browser</button>
-    </form>
-<script>
-document.getElementById("loginForm").onsubmit = function(e) {
-  e.preventDefault();
-  const n = (this.name.value || "").trim();
-  if (n.length < 2) { document.getElementById("loginErr").style.display="block"; document.getElementById("loginErr").textContent="Enter name (min 2 chars)"; return; }
-  localStorage.setItem("lexora_user", n);
-  location.href = "app.html";
-};
-if (localStorage.getItem("lexora_user")) location.href = "app.html";
-</script>
+  <div class="news-ticker">
+    <span class="ticker-label">LIVE</span>
+    <div class="ticker-content" id="tickerContent">Loading market news...</div>
   </div>
+
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo-icon">◈</div>
+        <div>
+          <h1>LexorA</h1>
+          <span class="tagline">AI Market Predictor</span>
+        </div>
+      </div>
+      <div class="live-status">
+        <span class="status-dot"></span>
+        <span>Market Live</span>
+        <small id="lastUpdate">--</small>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-link active" data-page="home"><span class="nav-icon">⌂</span> Home</a>
+        <a href="#" class="nav-link" data-page="markets"><span class="nav-icon">◉</span> Live Markets</a>
+        <a href="#" class="nav-link" data-page="calculator"><span class="nav-icon">⊕</span> Calculator</a>
+      </nav>
+      <div class="sidebar-footer">
+        <p class="setting-info">Public: <strong id="dataSource">LIVE</strong></p>
+        <p class="setting-info">Local: <a href="http://127.0.0.1:5000" style="color:var(--cyan)">127.0.0.1:5000</a></p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <button class="mobile-menu-btn" id="menuBtn" aria-label="Menu">☰</button>
+
+      <!-- HOME (same as localhost) -->
+      <div class="page-view" data-page="home">
+        <section class="page-header">
+          <h2>AI Investment Intelligence</h2>
+          <p>Real-time predictions across Gold, Crypto, Forex, Stocks &amp; Commodities</p>
+          <span class="refresh-badge" id="refreshBadge">Refreshing...</span>
+        </section>
+
+        <div class="hero-grid">
+          <div class="hero-card glass">
+            <h3>Market Pulse</h3>
+            <div class="pulse-indicator">
+              <span class="pulse-ring"></span>
+              <span class="pulse-text">Analyzing...</span>
+            </div>
+            <p class="hero-stat" id="assetCount">0 assets tracked</p>
+          </div>
+          <div class="hero-card glass accent">
+            <h3>AI Engine</h3>
+            <p>RSI · Moving Average · Linear Regression · Volatility</p>
+          </div>
+          <div class="hero-card glass">
+            <h3>Live Data</h3>
+            <p>CoinGecko · Frankfurter · Metals · Yahoo Finance</p>
+            <button class="btn btn-outline btn-sm" onclick="LexoraApp.refreshMarketData()">Refresh Now</button>
+          </div>
+        </div>
+
+        <section class="section">
+          <h3 class="section-title">Live Market Overview</h3>
+          <div class="market-grid" id="homeMarketGrid"></div>
+        </section>
+
+        <section class="section">
+          <div class="chart-row">
+            <div class="chart-card glass">
+              <h4>Market Comparison</h4>
+              <canvas id="comparisonChart"></canvas>
+            </div>
+            <div class="chart-card glass">
+              <h4>Volatility Index</h4>
+              <canvas id="volatilityChart"></canvas>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- LIVE MARKETS -->
+      <div class="page-view" data-page="markets" style="display:none">
+        <section class="page-header">
+          <h2>Live Markets</h2>
+          <p>Auto-refresh every 30 seconds · same data as localhost</p>
+        </section>
+        <div class="markets-table-wrap glass">
+          <table class="markets-table">
+            <thead>
+              <tr><th>Asset</th><th>Price</th><th>24h Change</th></tr>
+            </thead>
+            <tbody id="marketsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CALCULATOR -->
+      <div class="page-view" data-page="calculator" style="display:none">
+        <section class="page-header">
+          <h2>Investment Calculator</h2>
+        </section>
+        <div class="calc-tabs">
+          <button class="tab active" data-calc="sip">SIP</button>
+        </div>
+        <div class="calc-panel glass active" id="calc-sip">
+          <form class="calc-form" data-type="sip">
+            <div class="form-group"><label>Monthly ($)</label><input type="number" name="monthly" value="5000"></div>
+            <div class="form-group"><label>Rate % p.a.</label><input type="number" name="rate" value="12"></div>
+            <div class="form-group"><label>Years</label><input type="number" name="years" value="10"></div>
+            <button type="submit" class="btn btn-primary">Calculate</button>
+          </form>
+          <div class="calc-result" id="result-sip"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="live-data.js"></script>
+  <script src="charts.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
