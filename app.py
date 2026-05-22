@@ -72,7 +72,7 @@ def refresh_market_background():
             run_curation_cycle()
         except Exception as e:
             print(f"[Background] Refresh error: {e}")
-        time.sleep(30)
+        time.sleep(10)
 
 
 # ---------------------------------------------------------------------------

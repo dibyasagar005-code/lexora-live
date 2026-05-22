@@ -351,6 +351,49 @@ body.menu-open { overflow: hidden; }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .symbol-name { font-weight: 600; color: var(--gold); }
 .live-dot { width: 6px; height: 6px; background: var(--positive); border-radius: 50%; animation: blink 1s infinite; }
+.card-spot {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--positive);
+  background: rgba(0, 255, 136, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+.sidebar-credit {
+  position: static;
+  margin-top: 10px;
+  box-shadow: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.creator-credit {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 60;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cyan);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: rgba(10, 20, 40, 0.92);
+  border: 1px solid var(--cyan-dim);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+.creator-credit:hover { color: var(--gold); border-color: var(--gold); }
+@media (max-width: 900px) {
+  .creator-credit {
+    bottom: 8px;
+    right: 8px;
+    left: auto;
+    font-size: 10px;
+    padding: 6px 10px;
+    max-width: calc(100vw - 100px);
+  }
+}
 .card-price-main {
     font-size: clamp(1.1rem, 4.5vw, 1.55rem);
     font-weight: 700;

@@ -1,6 +1,6 @@
 """
 Market data API integration for LexorA.
-Fetches live prices from Yahoo Finance, CoinGecko, and Frankfurter.
+Yahoo Finance + CoinGecko + Frankfurter with price validation.
 """
 
 import requests
@@ -9,13 +9,30 @@ from datetime import datetime
 TIMEOUT = 12
 TROY_OZ_GRAMS = 31.1034768
 
-# Last-resort static prices (USD); only used when all APIs fail
+PRICE_RANGES = {
+    "gold": (1500, 6500),
+    "silver": (12, 120),
+    "platinum": (700, 3500),
+    "palladium": (800, 6000),
+    "copper": (2, 15),
+    "bitcoin": (10000, 250000),
+    "ethereum": (500, 25000),
+    "crude_oil": (35, 200),
+    "sp500": (3000, 9000),
+    "nasdaq": (10000, 35000),
+    "usd_inr": (70, 110),
+    "eur_usd": (0.85, 1.25),
+    "gbp_usd": (1.0, 1.45),
+}
+
 FALLBACK_PRICES = {
     "gold": 3340.0,
     "silver": 31.2,
+    "platinum": 1020.0,
+    "palladium": 980.0,
+    "copper": 4.25,
     "bitcoin": 97000.0,
     "ethereum": 3600.0,
-    "platinum": 1020.0,
     "crude_oil": 72.0,
     "usd_inr": 83.5,
     "sp500": 5900.0,
@@ -28,6 +45,8 @@ YAHOO_TICKERS = {
     "gold": "GC=F",
     "silver": "SI=F",
     "platinum": "PL=F",
+    "palladium": "PA=F",
+    "copper": "HG=F",
     "bitcoin": "BTC-USD",
     "ethereum": "ETH-USD",
     "crude_oil": "CL=F",
@@ -35,48 +54,69 @@ YAHOO_TICKERS = {
     "nasdaq": "^IXIC",
 }
 
+YAHOO_ALT = {
+    "gold": ["XAUUSD=X", "GC=F"],
+    "silver": ["XAGUSD=X", "SI=F"],
+}
 
-def _safe_request(url, params=None, headers=None):
+
+def _valid_price(key, price):
+    bounds = PRICE_RANGES.get(key)
+    if not bounds:
+        return price > 0
+    return bounds[0] <= price <= bounds[1]
+
+
+def _safe_request(url, params=None):
     try:
-        resp = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+        resp = requests.get(url, params=params, timeout=TIMEOUT)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
-        print(f"[API] Request failed: {url} - {e}")
+        print(f"[API] {url}: {e}")
         return None
 
 
-def fetch_yahoo_assets():
-    """Fetch all assets from Yahoo Finance via yfinance."""
-    data = {}
+def fetch_yahoo_ticker(ticker, key):
     try:
         import yfinance as yf
 
-        for key, ticker in YAHOO_TICKERS.items():
-            try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period="5d")
-                if hist.empty:
-                    continue
-                price = float(hist["Close"].iloc[-1])
-                prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
-                change = ((price - prev) / prev) * 100 if prev else 0
-                unit = "oz" if key in ("gold", "silver", "platinum") else "unit"
-                data[key] = {
-                    "price": round(price, 4),
-                    "change": round(change, 2),
-                    "symbol": key.upper(),
-                    "unit": unit,
-                }
-            except Exception as e:
-                print(f"[API] Yahoo {key}: {e}")
-    except ImportError:
-        print("[API] yfinance not available — pip install yfinance")
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="5d")
+        if hist.empty:
+            return None
+        price = float(hist["Close"].iloc[-1])
+        if not _valid_price(key, price):
+            return None
+        prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
+        change = ((price - prev) / prev) * 100 if prev else 0
+        unit = "oz" if key in ("gold", "silver", "platinum", "palladium") else "lb" if key == "copper" else "unit"
+        return {"price": round(price, 4), "change": round(change, 2), "symbol": key.upper(), "unit": unit}
+    except Exception:
+        return None
+
+
+def fetch_yahoo_asset(key):
+    tickers = [YAHOO_TICKERS.get(key)] + YAHOO_ALT.get(key, [])
+    for t in dict.fromkeys(tickers):
+        if not t:
+            continue
+        data = fetch_yahoo_ticker(t, key)
+        if data:
+            return data
+    return None
+
+
+def fetch_yahoo_assets():
+    data = {}
+    for key in YAHOO_TICKERS:
+        row = fetch_yahoo_asset(key)
+        if row:
+            data[key] = row
     return data
 
 
 def fetch_coingecko():
-    """CoinGecko — crypto prices with 24h change (backup / cross-check)."""
     data = {}
     result = _safe_request(
         "https://api.coingecko.com/api/v3/simple/price",
@@ -103,7 +143,6 @@ def fetch_coingecko():
 
 
 def fetch_frankfurter():
-    """USD forex rates from Frankfurter."""
     data = {}
     result = _safe_request(
         "https://api.frankfurter.app/latest",
@@ -135,57 +174,40 @@ def fetch_frankfurter():
 
 
 def fetch_market_data():
-    """Aggregate live market data from multiple APIs."""
     market = {
         "timestamp": datetime.utcnow().isoformat(),
         "source": "live",
         "assets": {},
+        "refreshSec": 10,
     }
 
-    yahoo = fetch_yahoo_assets()
-    market["assets"].update(yahoo)
-
-    crypto = fetch_coingecko()
-    for coin, info in crypto.items():
-        if coin not in market["assets"] or crypto[coin]["price"]:
+    market["assets"].update(fetch_yahoo_assets())
+    for coin, info in fetch_coingecko().items():
+        if _valid_price(coin, info["price"]):
             market["assets"][coin] = {
                 "price": info["price"],
                 "change": info.get("change", 0),
                 "symbol": coin.upper()[:3],
                 "unit": "unit",
             }
-
-    forex = fetch_frankfurter()
-    market["assets"].update(forex)
+    market["assets"].update(fetch_frankfurter())
 
     live_count = len(market["assets"])
-    if live_count < 6:
-        market["source"] = "mixed"
-        for symbol, price in FALLBACK_PRICES.items():
-            if symbol not in market["assets"]:
-                unit = "oz" if symbol in ("gold", "silver", "platinum") else "unit"
-                market["assets"][symbol] = {
-                    "price": price,
-                    "change": 0,
-                    "symbol": symbol.upper(),
-                    "unit": unit,
-                }
-    else:
-        for symbol, price in FALLBACK_PRICES.items():
-            if symbol not in market["assets"]:
-                unit = "oz" if symbol in ("gold", "silver", "platinum") else "unit"
-                market["assets"][symbol] = {
-                    "price": price,
-                    "change": 0,
-                    "symbol": symbol.upper(),
-                    "unit": unit,
-                }
+    for symbol, price in FALLBACK_PRICES.items():
+        if symbol not in market["assets"] or not _valid_price(symbol, market["assets"][symbol]["price"]):
+            unit = "oz" if symbol in ("gold", "silver", "platinum", "palladium") else "lb" if symbol == "copper" else "unit"
+            market["assets"][symbol] = {
+                "price": price,
+                "change": market["assets"].get(symbol, {}).get("change", 0),
+                "symbol": symbol.upper(),
+                "unit": unit,
+            }
 
+    market["source"] = "live" if live_count >= 10 else "mixed" if live_count >= 6 else "fallback"
     return market
 
 
 def get_historical_prices(symbol, days=30):
-    """Historical prices for ML / charts."""
     import numpy as np
 
     try:

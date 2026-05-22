@@ -16,17 +16,36 @@ const LexoraAPI = {
   },
   TIMEOUT: 14000,
   TROY_OZ_GRAMS: 31.1034768,
-  METALS: ["gold", "silver", "platinum"],
+  METALS: ["gold", "silver", "platinum", "palladium"],
+  METAL_LB: ["copper"],
+  /** Reject bad API values (e.g. copper $/lb mistaken as gold $/oz) */
+  PRICE_RANGES: {
+    gold: [1500, 6500], silver: [12, 120], platinum: [700, 3500], palladium: [800, 6000],
+    copper: [2, 15], bitcoin: [10000, 250000], ethereum: [500, 25000],
+    crude_oil: [35, 200], sp500: [3000, 9000], nasdaq: [10000, 35000],
+    usd_inr: [70, 110], eur_usd: [0.85, 1.25], gbp_usd: [1.0, 1.45],
+  },
   FALLBACK: {
-    gold: 3340, silver: 31.2, bitcoin: 97000, ethereum: 3600, platinum: 1020,
-    crude_oil: 72, usd_inr: 83.5, sp500: 5900, nasdaq: 19500, eur_usd: 1.08, gbp_usd: 1.27,
+    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, copper: 4.25,
+    bitcoin: 97000, ethereum: 3600, crude_oil: 72, usd_inr: 83.5,
+    sp500: 5900, nasdaq: 19500, eur_usd: 1.08, gbp_usd: 1.27,
   },
   LABELS: {
-    gold: "Gold", silver: "Silver", bitcoin: "Bitcoin", ethereum: "Ethereum",
-    platinum: "Platinum", crude_oil: "Crude Oil", usd_inr: "USD/INR",
+    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", copper: "Copper",
+    bitcoin: "Bitcoin", ethereum: "Ethereum", crude_oil: "Crude Oil", usd_inr: "USD/INR",
     sp500: "S&P 500", nasdaq: "NASDAQ", eur_usd: "EUR/USD", gbp_usd: "GBP/USD",
   },
-  YAHOO: { sp500: "^GSPC", nasdaq: "^IXIC", crude_oil: "CL=F", platinum: "PL=F", gold: "GC=F", silver: "SI=F", bitcoin: "BTC-USD", ethereum: "ETH-USD" },
+  YAHOO: {
+    gold: "GC=F", silver: "SI=F", platinum: "PL=F", palladium: "PA=F", copper: "HG=F",
+    bitcoin: "BTC-USD", ethereum: "ETH-USD", crude_oil: "CL=F",
+    sp500: "^GSPC", nasdaq: "^IXIC",
+  },
+  YAHOO_ALT: {
+    gold: ["XAUUSD=X", "GC=F"],
+    silver: ["XAGUSD=X", "SI=F"],
+    platinum: ["PL=F", "XPTUSD=X"],
+    palladium: ["PA=F", "XPDUSD=X"],
+  },
 
   isLocalFlask() {
     return location.hostname === "127.0.0.1" || location.hostname === "localhost";
@@ -82,35 +101,83 @@ const LexoraAPI = {
     return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
   },
 
+  isValidPrice(key, price) {
+    const range = this.PRICE_RANGES[key];
+    if (!range) return price > 0;
+    return price >= range[0] && price <= range[1];
+  },
+
   parseYahooChart(data) {
     const result = data?.chart?.result?.[0];
     if (!result) return null;
     const meta = result.meta || {};
     const closes = result.indicators?.quote?.[0]?.close?.filter((x) => x != null) || [];
-    const price = meta.regularMarketPrice || closes[closes.length - 1];
-    if (!price) return null;
-    const prev = closes.length > 1 ? closes[closes.length - 2] : price;
-    const change =
-      meta.regularMarketChangePercent ??
-      (prev ? ((price - prev) / prev) * 100 : 0);
-    return { price: Number(price), change: Number(change), closes };
+    let price = meta.regularMarketPrice ?? meta.previousClose ?? closes[closes.length - 1];
+    if (!price || !Number.isFinite(Number(price))) return null;
+    price = Number(price);
+    const prev = closes.length > 1 ? Number(closes[closes.length - 2]) : price;
+    let change = meta.regularMarketChangePercent;
+    if (change == null && prev) change = ((price - prev) / prev) * 100;
+    return { price, change: Number(change) || 0, closes };
   },
 
-  async fetchYahoo(key) {
-    const sym = this.YAHOO[key];
-    if (!sym) return null;
+  assetUnit(key) {
+    if (this.METALS.includes(key)) return "oz";
+    if (this.METAL_LB.includes(key)) return "lb";
+    return "unit";
+  },
+
+  async fetchYahooSymbol(sym, key) {
     try {
       const data = await this.fetchWithProxies(this.yahooChartUrl(sym));
       const parsed = this.parseYahooChart(data);
-      if (!parsed) return null;
+      if (!parsed || !this.isValidPrice(key, parsed.price)) return null;
       return {
         price: parsed.price,
         change: parsed.change,
-        unit: this.METALS.includes(key) ? "oz" : "unit",
+        unit: this.assetUnit(key),
       };
     } catch (e) {
       return null;
     }
+  },
+
+  async fetchYahoo(key) {
+    const symbols = [...new Set([this.YAHOO[key], ...(this.YAHOO_ALT[key] || [])].filter(Boolean))];
+    for (const sym of symbols) {
+      const hit = await this.fetchYahooSymbol(sym, key);
+      if (hit) return hit;
+    }
+    return null;
+  },
+
+  async fetchGoldApiSpot() {
+    try {
+      const data = await this.fetchWithProxies("https://api.gold-api.com/price/XAU");
+      const p = Number(data?.price ?? data?.items?.[0]?.xauPrice);
+      if (this.isValidPrice("gold", p)) return { price: p, change: 0, unit: "oz" };
+    } catch (e) { /* */ }
+    return null;
+  },
+
+  async fetchMetal(key) {
+    if (key === "gold") {
+      const api = await this.fetchGoldApiSpot();
+      if (api) return api;
+    }
+    return this.fetchYahoo(key);
+  },
+
+  async fetchMetalsBundle() {
+    const keys = ["gold", "silver", "platinum", "palladium", "copper"];
+    const out = {};
+    await Promise.all(
+      keys.map(async (k) => {
+        const y = await this.fetchMetal(k);
+        if (y) out[k] = y;
+      })
+    );
+    return out;
   },
 
   async fetchYahooHistory(key, days = 30) {
@@ -156,34 +223,53 @@ const LexoraAPI = {
     if (sym === "eur_usd" || sym === "gbp_usd") {
       return { primary: usd.toFixed(4), secondary: "exchange rate" };
     }
+    if (this.METAL_LB.includes(sym)) {
+      const local = cur === "USD" ? usd : this.convertFromUsd(usd, cur);
+      return {
+        primary: this.formatAmount(local, cur) + " /lb",
+        secondary: "$" + usd.toFixed(2) + " /lb USD",
+      };
+    }
     if (this.METALS.includes(sym)) {
       const perGram = this.usdPerGram(usd);
       const rate = cur === "USD" ? 1 : this.fxRates[cur] || this.usdInrRate;
       const gramLocal = cur === "USD" ? perGram : perGram * rate;
       return {
         primary: this.formatAmount(gramLocal, cur) + " /g",
-        secondary: "$" + usd.toLocaleString("en-US", { maximumFractionDigits: 0 }) + " /oz",
+        secondary: this.formatUsdSpot(usd) + " /oz spot",
       };
     }
     const converted = cur === "USD" ? usd : this.convertFromUsd(usd, cur);
     return {
       primary: this.formatAmount(converted, cur),
-      secondary: cur !== "USD" ? "$" + usd.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "",
+      secondary: cur !== "USD" ? this.formatUsdSpot(usd) + " USD" : "",
     };
   },
 
   async fetchForex() {
-    const data = await this.fetchJson("https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP");
-    const r = data.rates || {};
-    return {
-      usd_inr: r.INR,
-      eur_usd: r.EUR ? 1 / r.EUR : null,
-      gbp_usd: r.GBP ? 1 / r.GBP : null,
-    };
+    try {
+      const data = await this.fetchWithProxies("https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP");
+      const r = data.rates || {};
+      return {
+        usd_inr: r.INR,
+        eur_usd: r.EUR ? 1 / r.EUR : null,
+        gbp_usd: r.GBP ? 1 / r.GBP : null,
+      };
+    } catch (e) {
+      return {};
+    }
   },
 
   usdPerGram(usdPerOz) {
     return Number(usdPerOz) / this.TROY_OZ_GRAMS;
+  },
+
+  /** Avoid $4,511 reading as $4.511 — plain US$ + rounded dollars */
+  formatUsdSpot(usd) {
+    const n = Number(usd);
+    if (!Number.isFinite(n)) return "—";
+    if (n >= 100) return "US$ " + Math.round(n).toString();
+    return "US$ " + n.toFixed(2);
   },
 
   /** Main market fetch — Yahoo + CoinGecko + Frankfurter */
@@ -196,21 +282,33 @@ const LexoraAPI = {
     }
 
     const assets = {};
-    const yahooKeys = Object.keys(this.YAHOO);
-    const [yahooResults, crypto, forex] = await Promise.all([
-      Promise.all(yahooKeys.map(async (key) => [key, await this.fetchYahoo(key)])),
+    const stockKeys = ["sp500", "nasdaq", "crude_oil", "bitcoin", "ethereum"];
+    const [metals, crypto, forex, stocks] = await Promise.all([
+      this.fetchMetalsBundle(),
       this.fetchCrypto().catch(() => ({})),
       this.fetchForex().catch(() => ({})),
-      this.fetchFxRates(),
+      Promise.all(stockKeys.map(async (key) => [key, await this.fetchYahoo(key)])),
     ]);
+    await this.fetchFxRates();
 
-    yahooResults.forEach(([key, y]) => {
+    Object.entries(metals).forEach(([key, y]) => {
+      assets[key] = {
+        price: y.price,
+        change: y.change,
+        symbol: key.toUpperCase(),
+        unit: y.unit,
+        updated: Date.now(),
+      };
+    });
+
+    stocks.forEach(([key, y]) => {
       if (y) {
         assets[key] = {
           price: y.price,
           change: y.change,
           symbol: key.toUpperCase(),
           unit: y.unit || "unit",
+          updated: Date.now(),
         };
       }
     });
@@ -227,18 +325,19 @@ const LexoraAPI = {
 
     let liveCount = Object.keys(assets).length;
     Object.keys(this.FALLBACK).forEach((sym) => {
-      if (!assets[sym]) {
+      if (!assets[sym] || !this.isValidPrice(sym, assets[sym].price)) {
         assets[sym] = {
           price: this.FALLBACK[sym],
-          change: 0,
+          change: assets[sym]?.change || 0,
           symbol: sym.toUpperCase(),
-          unit: this.METALS.includes(sym) ? "oz" : "unit",
+          unit: this.assetUnit(sym),
+          updated: Date.now(),
         };
       }
     });
 
-    const source = liveCount >= 8 ? "live" : liveCount >= 4 ? "mixed" : "fallback";
-    return { timestamp: new Date().toISOString(), source, assets };
+    const source = liveCount >= 10 ? "live" : liveCount >= 6 ? "mixed" : "fallback";
+    return { timestamp: new Date().toISOString(), source, assets, refreshSec: 8 };
   },
 
   formatPrice(sym, priceUsd, currency) {
@@ -361,8 +460,9 @@ const LexoraAPI = {
       } catch (e) { /* */ }
     }
     const syms = [
-      "gold", "silver", "platinum", "bitcoin", "ethereum",
-      "crude_oil", "sp500", "nasdaq", "usd_inr", "eur_usd", "gbp_usd",
+      "gold", "silver", "platinum", "palladium", "copper",
+      "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq",
+      "usd_inr", "eur_usd", "gbp_usd",
     ];
     const out = {};
     for (const s of syms) out[s] = await this.predict(s);

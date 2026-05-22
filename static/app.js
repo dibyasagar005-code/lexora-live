@@ -2,7 +2,9 @@
  * LexorA AI Market Predictor — works on localhost Flask AND GitHub Pages.
  */
 const LexoraApp = {
-  refreshInterval: 30000,
+  refreshInterval: 8000,
+  lastMarketFetch: Date.now(),
+  refreshLabelTimer: null,
   refreshTimer: null,
   market: null,
   currentPage: "home",
@@ -101,6 +103,17 @@ const LexoraApp = {
   startLiveRefresh() {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
     this.refreshTimer = setInterval(() => this.refreshMarketData(), this.refreshInterval);
+    if (this.refreshLabelTimer) clearInterval(this.refreshLabelTimer);
+    this.refreshLabelTimer = setInterval(() => this.tickRefreshLabel(), 1000);
+  },
+
+  tickRefreshLabel() {
+    const el = document.getElementById("lastUpdate");
+    const badge = document.getElementById("refreshBadge");
+    const sec = Math.max(0, Math.floor((Date.now() - this.lastMarketFetch) / 1000));
+    const txt = sec < 3 ? "just now" : `${sec}s ago`;
+    if (el) el.textContent = `● ${txt}`;
+    if (badge) badge.textContent = `LIVE · ${txt}`;
   },
 
   async refreshMarketData() {
@@ -108,17 +121,17 @@ const LexoraApp = {
     if (pulse) pulse.textContent = "Updating live data…";
     try {
       this.market = await LexoraAPI.fetchMarket();
+      this.lastMarketFetch = Date.now();
       if (this.market?.assets?.usd_inr?.price) {
         this.usdInrRate = this.market.assets.usd_inr.price;
         LexoraAPI.usdInrRate = this.usdInrRate;
       }
       this.updateMarketCards(this.market);
       this.updateLastRefresh(this.market.timestamp);
-      const badge = document.getElementById("refreshBadge");
-      if (badge) badge.textContent = "Updated " + new Date().toLocaleTimeString();
+      this.tickRefreshLabel();
       const src = document.getElementById("dataSource");
-      if (src) src.textContent = this.market.source.toUpperCase();
-      if (pulse) pulse.textContent = this.market.source === "live" ? "● LIVE" : "● Fallback";
+      if (src) src.textContent = this.market.source.toUpperCase() + " · 8s refresh";
+      if (pulse) pulse.textContent = this.market.source === "live" ? "● INSTANT LIVE" : "● Mixed feed";
       if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       LexoraCharts.refreshAll(this.market);
@@ -153,7 +166,7 @@ const LexoraApp = {
         if (subEl) subEl.textContent = display.secondary || "";
         if (changeEl) {
           const ch = asset.change || 0;
-          changeEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "% (24h)";
+          changeEl.textContent = (ch >= 0 ? "+" : "") + ch.toFixed(2) + "% live";
           changeEl.className = "card-change " + (ch >= 0 ? "positive" : "negative");
         }
       });
@@ -163,9 +176,10 @@ const LexoraApp = {
   renderMarketSkeleton() {
     const grid = document.getElementById("homeMarketGrid");
     if (!grid) return;
-    grid.innerHTML = Object.keys(LexoraAPI.FALLBACK).map((sym) => `
+    const symbols = Object.keys(LexoraAPI.FALLBACK);
+    grid.innerHTML = symbols.map((sym) => `
       <div class="market-card" data-symbol="${sym}">
-        <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="live-dot"></span></div>
+        <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="card-spot">LIVE</span></div>
         <div class="card-price-main">—</div>
         <div class="card-price-sub"></div>
         <div class="card-change">—</div>
@@ -213,7 +227,7 @@ const LexoraApp = {
     try {
       const data = await LexoraAPI.predictAll();
       box.innerHTML = "";
-      ["gold", "silver", "platinum", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq", "usd_inr"].forEach((sym) => {
+      ["gold", "silver", "platinum", "palladium", "copper", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq"].forEach((sym) => {
         const p = data[sym];
         if (!p) return;
         const d = document.createElement("div");
@@ -239,7 +253,12 @@ const LexoraApp = {
   },
 
   initMarketTabs() {
-    const cats = { metals: ["gold", "silver", "platinum"], crypto: ["bitcoin", "ethereum"], forex: ["usd_inr", "eur_usd", "gbp_usd"], stocks: ["sp500", "nasdaq"] };
+    const cats = {
+      metals: ["gold", "silver", "platinum", "palladium", "copper"],
+      crypto: ["bitcoin", "ethereum"],
+      forex: ["usd_inr", "eur_usd", "gbp_usd"],
+      stocks: ["sp500", "nasdaq"],
+    };
     document.querySelectorAll(".market-tabs .tab").forEach((tab) => {
       tab.addEventListener("click", () => {
         document.querySelectorAll(".market-tabs .tab").forEach((t) => t.classList.remove("active"));

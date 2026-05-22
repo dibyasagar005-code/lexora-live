@@ -49,7 +49,7 @@ const LexoraCharts = {
     const m = market || LexoraApp?.market;
     if (!m?.assets) return;
 
-    const order = ["gold", "silver", "bitcoin", "ethereum", "sp500", "nasdaq", "crude_oil", "platinum"];
+    const order = ["gold", "silver", "platinum", "palladium", "copper", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq"];
     const rows = order
       .filter((s) => m.assets[s])
       .map((s) => ({
@@ -71,7 +71,7 @@ const LexoraCharts = {
         labels,
         datasets: [
           {
-            label: "24h Change %",
+            label: "Live move %",
             data: values,
             backgroundColor: colors,
             borderRadius: 6,
@@ -84,7 +84,7 @@ const LexoraCharts = {
           ...this.mobileOptions.plugins,
           title: {
             display: true,
-            text: "24h performance (live API)",
+            text: "Live move from Yahoo / CoinGecko",
             color: "#7a9bb8",
             font: { size: 11 },
           },
@@ -135,6 +135,8 @@ const LexoraCharts = {
     const symbols = [
       { key: "gold", label: "Gold", color: "#ffd700" },
       { key: "silver", label: "Silver", color: "#c0c0c0" },
+      { key: "platinum", label: "Platinum", color: "#e5e4e2" },
+      { key: "palladium", label: "Palladium", color: "#9eb4c8" },
       { key: "bitcoin", label: "Bitcoin", color: "#00f0ff" },
     ];
 

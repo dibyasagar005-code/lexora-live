@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LexorA — Luxury Exchange Of Real-time Assets</title>
-  <link rel="stylesheet" href="static/style.css?v=5">
+  <link rel="stylesheet" href="static/style.css?v=6">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -49,6 +49,7 @@
       </div>
       <div class="sidebar-footer">
         <p class="setting-info">Data: <strong id="dataSource">LIVE</strong></p>
+        <p class="creator-credit">Built by <strong>@dibyasagar1297</strong></p>
       </div>
     </aside>
 
@@ -59,7 +60,7 @@
       <div class="page-view" data-page="home">
         <section class="page-header">
           <h2>AI Investment Intelligence</h2>
-          <p>Live Yahoo · CoinGecko · Frankfurter — real asset prices</p>
+          <p>Instant refresh every 8s · Yahoo · CoinGecko · Gold-API · Frankfurter</p>
           <span class="refresh-badge" id="refreshBadge">Connecting APIs…</span>
         </section>
         <div class="hero-grid">
@@ -70,12 +71,12 @@
           </div>
           <div class="hero-card glass accent">
             <h3>Live APIs</h3>
-            <p>Yahoo Finance · CoinGecko · Frankfurter FX</p>
+            <p>Yahoo · CoinGecko · Gold-API · Frankfurter</p>
             <button type="button" class="btn btn-primary btn-sm" onclick="LexoraApp.refreshMarketData()">Refresh Now</button>
           </div>
           <div class="hero-card glass">
-            <h3>Auto Update</h3>
-            <p>Prices refresh every 30 seconds</p>
+            <h3>Instant Update</h3>
+            <p>Live spot prices every 8 seconds</p>
           </div>
         </div>
         <section class="section">
@@ -88,7 +89,7 @@
         </section>
         <section class="section">
           <div class="chart-row">
-            <div class="chart-card glass"><h4>Market Comparison (24h %)</h4><div class="chart-canvas-wrap"><canvas id="comparisonChart"></canvas></div></div>
+            <div class="chart-card glass"><h4>Live Market Move %</h4><div class="chart-canvas-wrap"><canvas id="comparisonChart"></canvas></div></div>
             <div class="chart-card glass"><h4>Volatility Index</h4><div class="chart-canvas-wrap"><canvas id="volatilityChart"></canvas></div></div>
           </div>
         </section>
@@ -98,7 +99,7 @@
       <div class="page-view" data-page="markets">
         <section class="page-header">
           <h2>Live Markets</h2>
-          <p>Real-time prices · Auto-refresh 30s</p>
+          <p>Real-time spot · refreshes every 10s</p>
         </section>
         <div class="market-tabs">
           <button class="tab active" data-filter="all">All</button>
@@ -109,7 +110,7 @@
         </div>
         <div class="markets-table-wrap glass">
           <table class="markets-table">
-            <thead><tr><th>Asset</th><th>Price</th><th>24h</th><th>Signal</th><th></th></tr></thead>
+            <thead><tr><th>Asset</th><th>Live Price</th><th>Move</th><th>Signal</th><th></th></tr></thead>
             <tbody id="marketsBody"></tbody>
           </table>
         </div>
@@ -126,6 +127,10 @@
             <a href="#" class="symbol-chip active" data-sym="gold">Gold</a>
             <a href="#" class="symbol-chip" data-sym="silver">Silver</a>
             <a href="#" class="symbol-chip" data-sym="platinum">Platinum</a>
+            <a href="#" class="symbol-chip" data-sym="palladium">Palladium</a>
+            <a href="#" class="symbol-chip" data-sym="copper">Copper</a>
+            <a href="#" class="symbol-chip" data-sym="palladium">Palladium</a>
+            <a href="#" class="symbol-chip" data-sym="copper">Copper</a>
             <a href="#" class="symbol-chip" data-sym="bitcoin">Bitcoin</a>
             <a href="#" class="symbol-chip" data-sym="ethereum">Ethereum</a>
             <a href="#" class="symbol-chip" data-sym="crude_oil">Crude Oil</a>
@@ -250,8 +255,9 @@
     </main>
   </div>
 
-  <script src="static/api.js?v=5"></script>
-  <script src="static/charts.js?v=5"></script>
-  <script src="static/app.js?v=5"></script>
+  <a class="creator-credit" href="https://www.instagram.com/dibyasagar1297" target="_blank" rel="noopener">Made by @dibyasagar1297</a>
+  <script src="static/api.js?v=6"></script>
+  <script src="static/charts.js?v=6"></script>
+  <script src="static/app.js?v=6"></script>
 </body>
 </html>
