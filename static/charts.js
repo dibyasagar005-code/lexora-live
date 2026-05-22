@@ -93,12 +93,12 @@ const LexoraCharts = {
     });
   },
 
-  async initVolatilityChart(canvasId) {
+  async initVolatilityChart(canvasId, market) {
     const canvas = this._wrapCanvas(canvasId);
     const ctx = canvas?.getContext("2d");
     if (!ctx) return;
     try {
-      const data = await LexoraAPI.predictAll();
+      const data = await LexoraAPI.predictAll(market || LexoraApp?.market);
       const labels = [];
       const values = [];
       Object.entries(data).slice(0, 8).forEach(([sym, p]) => {
@@ -256,11 +256,14 @@ const LexoraCharts = {
     if (document.getElementById("comparisonChart")) {
       this.initComparisonChart("comparisonChart", market);
     }
-    if (document.getElementById("volatilityChart")) {
-      this.initVolatilityChart("volatilityChart");
-    }
-    if (document.getElementById("livePriceChart") && LexoraApp?.currentPage === "markets") {
-      this.initLivePriceChart("livePriceChart", market);
-    }
+    if (!market?.assets) return;
+    setTimeout(() => {
+      if (document.getElementById("volatilityChart")) {
+        this.initVolatilityChart("volatilityChart", market);
+      }
+      if (document.getElementById("livePriceChart") && LexoraApp?.currentPage === "markets") {
+        this.initLivePriceChart("livePriceChart", market);
+      }
+    }, 50);
   },
 };

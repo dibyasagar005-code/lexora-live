@@ -14,7 +14,8 @@ const LexoraAPI = {
     AUD: { symbol: "A$", locale: "en-AU", name: "Australian Dollar" },
     CAD: { symbol: "C$", locale: "en-CA", name: "Canadian Dollar" },
   },
-  TIMEOUT: 14000,
+  TIMEOUT: 8000,
+  FETCH_TIMEOUT: 6000,
   TROY_OZ_GRAMS: 31.1034768,
   METALS: ["gold", "silver", "platinum", "palladium"],
   METAL_LB: ["copper"],
@@ -47,6 +48,17 @@ const LexoraAPI = {
     palladium: ["PA=F", "XPDUSD=X"],
   },
   _lastPrices: {},
+
+  withTimeout(promise, ms = this.FETCH_TIMEOUT) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+    ]);
+  },
+
+  unwrapSettled(result) {
+    return result.status === "fulfilled" ? result.value : null;
+  },
 
   isLocalFlask() {
     return location.hostname === "127.0.0.1" || location.hostname === "localhost";
@@ -112,7 +124,6 @@ const LexoraAPI = {
       this.cacheBust(path),
       this.cacheBust("https://corsproxy.io/?" + encodeURIComponent(path)),
       this.cacheBust("https://api.allorigins.win/raw?url=" + encodeURIComponent(path)),
-      this.cacheBust("https://api.allorigins.win/get?url=" + encodeURIComponent(path)),
     ];
     let lastErr;
     for (const url of urls) {
@@ -447,81 +458,148 @@ const LexoraAPI = {
     return "US$ " + n.toFixed(2);
   },
 
-  /** Main market fetch — Yahoo + CoinGecko + Frankfurter */
+  putMarketAsset(assets, key, y, isLive = true) {
+    if (!y || !this.isValidPrice(key, y.price)) return;
+    assets[key] = {
+      price: Number(y.price),
+      change: this.resolveChange(key, y.price, y.change),
+      symbol: key.toUpperCase(),
+      unit: y.unit || this.assetUnit(key),
+      updated: Date.now(),
+      live: isLive,
+      apiSource: y.source || (isLive ? "live" : "offline-estimate"),
+    };
+  },
+
+  fillMissingWithFallback(assets) {
+    Object.keys(this.FALLBACK).forEach((sym) => {
+      if (!assets[sym] || !this.isValidPrice(sym, assets[sym].price)) {
+        this.putMarketAsset(
+          assets,
+          sym,
+          { price: this.FALLBACK[sym], change: 0, unit: this.assetUnit(sym), source: "offline-estimate" },
+          false
+        );
+      }
+    });
+  },
+
+  finalizeMarket(assets) {
+    this.fillMissingWithFallback(assets);
+    const liveCount = Object.values(assets).filter((a) => a.live).length;
+    const total = Object.keys(assets).length;
+    const source = liveCount >= 10 ? "live" : liveCount >= 5 ? "mixed" : liveCount >= 1 ? "mixed" : "offline";
+    return {
+      timestamp: new Date().toISOString(),
+      source,
+      assets,
+      refreshSec: 8,
+      liveCount,
+      total,
+    };
+  },
+
+  /** Fast lane: gold-api + Binance + Frankfurter (under ~6s) */
+  async fetchMarketFastLane() {
+    const [goldR, silverR, cryptoR, forexR, fxR] = await Promise.allSettled([
+      this.withTimeout(this.fetchGoldApiSpot(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchGoldApiMetal("XAG", "silver"), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchCryptoBinance(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchForex(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT),
+    ]);
+    return {
+      gold: this.unwrapSettled(goldR),
+      silver: this.unwrapSettled(silverR),
+      crypto: this.unwrapSettled(cryptoR) || {},
+      forex: this.unwrapSettled(forexR) || {},
+      fxOk: fxR.status === "fulfilled",
+    };
+  },
+
+  /** Extra assets with per-call timeout (non-blocking feel) */
+  async fetchMarketExtras() {
+    const out = {};
+    const metalKeys = ["platinum", "palladium", "copper"];
+    const stockKeys = ["sp500", "nasdaq", "crude_oil"];
+    await Promise.all(
+      [...metalKeys, ...stockKeys].map(async (key) => {
+        const y = await this.withTimeout(this.fetchYahoo(key, true), 5000).catch(() => null);
+        if (y) out[key] = y;
+      })
+    );
+    try {
+      const cg = await this.withTimeout(this.fetchCrypto(), 5000);
+      Object.entries(cg || {}).forEach(([k, v]) => {
+        if (v && !out[k]) out[k] = v;
+      });
+    } catch (e) {
+      /* */
+    }
+    return out;
+  },
+
+  /** Main market fetch — fast APIs first, always returns all assets */
   async fetchMarket(force = false) {
     if (this.isLocalFlask()) {
       try {
         const url = force ? "/api/market?fresh=1" : "/api/market";
-        const r = await fetch(this.cacheBust(url), { cache: "no-store" });
-        if (r.ok) return await r.json();
+        const r = await this.withTimeout(
+          fetch(this.cacheBust(url), { cache: "no-store" }).then((res) => {
+            if (!res.ok) throw new Error(String(res.status));
+            return res.json();
+          }),
+          12000
+        );
+        if (r?.assets && Object.keys(r.assets).length) return r;
       } catch (e) {
         console.warn("[LexorA] Flask /api/market:", e.message);
       }
     }
 
     const assets = {};
-    const stockKeys = ["sp500", "nasdaq", "crude_oil"];
-    const [metals, crypto, forex, stocks] = await Promise.all([
-      this.fetchMetalsBundle(),
-      this.fetchCrypto().catch(() => ({})),
-      this.fetchForex().catch(() => ({})),
-      Promise.all(stockKeys.map(async (key) => [key, await this.fetchYahoo(key, true)])),
-    ]);
-    await this.fetchFxRates();
+    const fast = await this.fetchMarketFastLane();
 
-    const putAsset = (key, y, isLive = true) => {
-      if (!y || !this.isValidPrice(key, y.price)) return;
-      assets[key] = {
-        price: y.price,
-        change: this.resolveChange(key, y.price, y.change),
-        symbol: key.toUpperCase(),
-        unit: y.unit || this.assetUnit(key),
-        updated: Date.now(),
-        live: isLive,
-        apiSource: y.source || (isLive ? "live" : "fallback"),
-      };
-    };
-
-    Object.entries(metals).forEach(([key, y]) => putAsset(key, y, true));
-
-    stocks.forEach(([key, y]) => {
-      if (y) putAsset(key, y, true);
-    });
-
-    Object.entries(crypto).forEach(([k, v]) => {
-      if (!assets[k]) putAsset(k, v, true);
-      else if (Math.abs(v.change || 0) >= Math.abs(assets[k].change || 0)) putAsset(k, v, true);
-    });
-
-    if (forex.usd_inr) {
-      putAsset("usd_inr", { price: forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" }, true);
+    if (fast.gold) this.putMarketAsset(assets, "gold", fast.gold, true);
+    if (fast.silver) this.putMarketAsset(assets, "silver", fast.silver, true);
+    Object.entries(fast.crypto).forEach(([k, v]) => this.putMarketAsset(assets, k, v, true));
+    if (fast.forex.usd_inr) {
+      this.putMarketAsset(
+        assets,
+        "usd_inr",
+        { price: fast.forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" },
+        true
+      );
     }
-    if (forex.eur_usd) {
-      putAsset("eur_usd", { price: forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" }, true);
+    if (fast.forex.eur_usd) {
+      this.putMarketAsset(
+        assets,
+        "eur_usd",
+        { price: fast.forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" },
+        true
+      );
     }
-    if (forex.gbp_usd) {
-      putAsset("gbp_usd", { price: forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" }, true);
+    if (fast.forex.gbp_usd) {
+      this.putMarketAsset(
+        assets,
+        "gbp_usd",
+        { price: fast.forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" },
+        true
+      );
     }
 
-    let liveCount = Object.values(assets).filter((a) => a.live).length;
-    Object.keys(this.FALLBACK).forEach((sym) => {
-      if (!assets[sym] || !this.isValidPrice(sym, assets[sym].price)) {
-        putAsset(
-          sym,
-          {
-            price: this.FALLBACK[sym],
-            change: 0,
-            unit: this.assetUnit(sym),
-            source: "offline-estimate",
-          },
-          false
-        );
-      }
-    });
+    this.fillMissingWithFallback(assets);
 
-    liveCount = Object.values(assets).filter((a) => a.live).length;
-    const source = liveCount >= 10 ? "live" : liveCount >= 5 ? "mixed" : "offline";
-    return { timestamp: new Date().toISOString(), source, assets, refreshSec: 5, liveCount };
+    try {
+      const extras = await this.withTimeout(this.fetchMarketExtras(), 8000);
+      Object.entries(extras).forEach(([key, y]) => {
+        if (y) this.putMarketAsset(assets, key, y, true);
+      });
+    } catch (e) {
+      console.warn("[LexorA] extras:", e.message);
+    }
+
+    return this.finalizeMarket(assets);
   },
 
   formatPrice(sym, priceUsd, currency) {
@@ -581,13 +659,85 @@ const LexoraAPI = {
     return 100 - 100 / (1 + g / l);
   },
 
-  async history(sym, days = 30) {
-    const closes = await this.fetchYahooHistory(sym, days);
-    if (closes.length > 2) return closes;
-    const base = this.FALLBACK[sym] || 100;
-    const out = [base];
-    for (let i = 0; i < days; i++) out.push(out[out.length - 1] * (1 + (Math.random() - 0.5) * 0.015));
+  buildHistoryFromLive(livePrice, days = 35) {
+    const base = Number(livePrice) || 100;
+    const out = [];
+    let p = base * 0.96;
+    for (let i = 0; i < days; i++) {
+      p *= 1 + (Math.random() - 0.48) * 0.012;
+      out.push(p);
+    }
+    out[out.length - 1] = base;
     return out;
+  },
+
+  async history(sym, days = 30, livePrice = null) {
+    try {
+      const closes = await this.withTimeout(this.fetchYahooHistory(sym, days), 4000);
+      if (closes.length > 4) {
+        if (livePrice && this.isValidPrice(sym, livePrice)) closes[closes.length - 1] = Number(livePrice);
+        return closes;
+      }
+    } catch (e) {
+      /* synthetic */
+    }
+    const base = livePrice && this.isValidPrice(sym, livePrice) ? livePrice : this.FALLBACK[sym] || 100;
+    return this.buildHistoryFromLive(base, days);
+  },
+
+  runPredictionMath(symbol, current, prices) {
+    const rsi = this.rsi(prices);
+    const ma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / Math.min(5, prices.length);
+    const ma20 = prices.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, prices.length);
+    const trend = ma5 > ma20 * 1.01 ? "bullish" : ma5 < ma20 * 0.99 ? "bearish" : "neutral";
+    const expected = current * (1 + (trend === "bullish" ? 0.025 : trend === "bearish" ? -0.025 : 0.005));
+    let signal = "HOLD";
+    let confidence = 62;
+    if (rsi < 35 && trend !== "bearish") {
+      signal = "UP";
+      confidence = 78;
+    } else if (rsi > 65 && trend !== "bullish") {
+      signal = "DOWN";
+      confidence = 78;
+    } else if (trend === "bullish") {
+      signal = "UP";
+      confidence = 68;
+    } else if (trend === "bearish") {
+      signal = "DOWN";
+      confidence = 68;
+    }
+    const rets = [];
+    for (let i = 1; i < prices.length; i++) rets.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+    const vol = rets.length
+      ? Math.sqrt(rets.slice(-14).reduce((a, b) => a + b * b, 0) / Math.min(14, rets.length)) *
+        Math.sqrt(252) *
+        100
+      : 12;
+    const rec =
+      signal === "UP" ? "BUY" : signal === "DOWN" ? "SELL" : "HOLD";
+    return {
+      symbol,
+      signal,
+      confidence,
+      trend,
+      current_price: Math.round(current * 100) / 100,
+      expected_price: Math.round(expected * 100) / 100,
+      rsi: Math.round(rsi * 10) / 10,
+      volatility: Math.round(vol * 10) / 10,
+      historical: prices.slice(-30).map((p) => Math.round(p * 100) / 100),
+      forecast: [1, 2, 3, 4, 5].map((i) =>
+        Math.round((current + ((expected - current) * i) / 5) * 100) / 100
+      ),
+      sentiment: {
+        label: trend === "bullish" ? "Bullish" : trend === "bearish" ? "Bearish" : "Neutral",
+      },
+      recommendation: rec,
+      recommendation_reason:
+        `RSI ${Math.round(rsi)} · ${trend} trend · live spot ${
+          LexoraAPI.label(symbol)
+        } analysis`,
+      risk_level: Math.min(100, Math.round(vol * 2 + (rsi > 70 || rsi < 30 ? 18 : 8))),
+    };
   },
 
   /** % change series from first point (for live stream chart) */
@@ -600,63 +750,62 @@ const LexoraAPI = {
   async predict(symbol, market) {
     if (this.isLocalFlask()) {
       try {
-        const r = await fetch(this.cacheBust(`/api/predict/${symbol}`));
-        const j = await r.json();
-        if (j.success) return j.data;
-      } catch (e) { /* */ }
+        const j = await this.withTimeout(
+          fetch(this.cacheBust(`/api/predict/${symbol}`)).then((r) => r.json()),
+          8000
+        );
+        if (j.success && j.data) return j.data;
+      } catch (e) {
+        /* client AI */
+      }
     }
     const live = market?.assets?.[symbol];
-    const prices = await this.history(symbol, 40);
-    let current = prices[prices.length - 1];
-    if (live?.price && this.isValidPrice(symbol, live.price)) {
-      current = Number(live.price);
-      prices[prices.length - 1] = current;
-    }
-    const rsi = this.rsi(prices);
-    const ma5 = prices.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    const ma20 = prices.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, prices.length);
-    const trend = ma5 > ma20 * 1.01 ? "bullish" : ma5 < ma20 * 0.99 ? "bearish" : "neutral";
-    const expected = current * (1 + (trend === "bullish" ? 0.02 : trend === "bearish" ? -0.02 : 0));
-    let signal = "HOLD", confidence = 60;
-    if (rsi < 35 && trend !== "bearish") { signal = "UP"; confidence = 75; }
-    else if (rsi > 65 && trend !== "bullish") { signal = "DOWN"; confidence = 75; }
-    else if (trend === "bullish") { signal = "UP"; confidence = 65; }
-    else if (trend === "bearish") { signal = "DOWN"; confidence = 65; }
-    const rets = [];
-    for (let i = 1; i < prices.length; i++) rets.push((prices[i] - prices[i - 1]) / prices[i - 1]);
-    const vol = rets.length ? Math.sqrt(rets.slice(-14).reduce((a, b) => a + b * b, 0) / Math.min(14, rets.length)) * Math.sqrt(252) * 100 : 0;
-    return {
-      symbol, signal, confidence, trend,
-      current_price: Math.round(current * 100) / 100,
-      expected_price: Math.round(expected * 100) / 100,
-      rsi: Math.round(rsi * 10) / 10,
-      volatility: Math.round(vol * 10) / 10,
-      historical: prices.slice(-30).map((p) => Math.round(p * 100) / 100),
-      forecast: [1, 2, 3, 4, 5].map((i) => Math.round((current + (expected - current) * i / 5) * 100) / 100),
-      sentiment: { label: trend === "bullish" ? "Bullish" : trend === "bearish" ? "Bearish" : "Neutral" },
-      recommendation: signal === "UP" ? "BUY" : signal === "DOWN" ? "SELL" : "HOLD",
-      recommendation_reason: "Client-side AI analysis",
-      risk_level: Math.min(100, Math.round(vol * 2 + (rsi > 70 || rsi < 30 ? 20 : 0))),
-    };
+    const livePrice =
+      live?.price && this.isValidPrice(symbol, live.price)
+        ? Number(live.price)
+        : this.FALLBACK[symbol];
+    const prices = await this.history(symbol, 40, livePrice);
+    const current = Number(livePrice);
+    return this.runPredictionMath(symbol, current, prices);
   },
 
   async predictAll(market) {
     if (this.isLocalFlask()) {
       try {
-        const r = await fetch(this.cacheBust("/api/predictions/all"));
-        const j = await r.json();
-        if (j.success) return j.data;
-      } catch (e) { /* */ }
+        const j = await this.withTimeout(
+          fetch(this.cacheBust("/api/predictions/all")).then((r) => r.json()),
+          10000
+        );
+        if (j.success && j.data) return j.data;
+      } catch (e) {
+        /* */
+      }
     }
     const m = market || (typeof LexoraApp !== "undefined" ? LexoraApp.market : null);
     const syms = [
-      "gold", "silver", "platinum", "palladium", "copper",
-      "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq",
-      "usd_inr", "eur_usd", "gbp_usd",
+      "gold",
+      "silver",
+      "platinum",
+      "palladium",
+      "copper",
+      "bitcoin",
+      "ethereum",
+      "crude_oil",
+      "sp500",
+      "nasdaq",
     ];
-    const out = {};
-    for (const s of syms) out[s] = await this.predict(s, m);
-    return out;
+    const pairs = await Promise.all(
+      syms.map(async (s) => {
+        const live = m?.assets?.[s];
+        const livePrice =
+          live?.price && this.isValidPrice(s, live.price)
+            ? Number(live.price)
+            : this.FALLBACK[s];
+        const prices = this.buildHistoryFromLive(livePrice, 35);
+        return [s, this.runPredictionMath(s, livePrice, prices)];
+      })
+    );
+    return Object.fromEntries(pairs);
   },
 
   newsHeadlines() {

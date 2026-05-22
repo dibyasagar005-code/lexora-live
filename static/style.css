@@ -467,6 +467,15 @@ body.menu-open { overflow: hidden; }
   font-size: 14px;
 }
 .pred-live-strip span { color: var(--text-muted); margin-left: 8px; }
+.pred-reason {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.rec-buy { color: var(--positive); font-weight: 700; }
+.rec-sell { color: var(--negative); font-weight: 700; }
+.rec-hold { color: var(--gold); font-weight: 700; }
 .prediction-hero {
     display: grid;
     grid-template-columns: 1fr 1fr;

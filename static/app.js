@@ -2,11 +2,13 @@
  * LexorA AI Market Predictor — works on localhost Flask AND GitHub Pages.
  */
 const LexoraApp = {
-  refreshInterval: 5000,
+  refreshInterval: 8000,
   activePrediction: "gold",
   lastMarketFetch: Date.now(),
   refreshLabelTimer: null,
   refreshTimer: null,
+  _marketRefreshInFlight: false,
+  _pendingForceRefresh: false,
   market: null,
   currentPage: "home",
   currency: localStorage.getItem("lexora_currency") || "INR",
@@ -125,12 +127,14 @@ const LexoraApp = {
   },
 
   async refreshMarketData(force = false) {
+    if (this._marketRefreshInFlight) {
+      if (force) this._pendingForceRefresh = true;
+      return;
+    }
+    this._marketRefreshInFlight = true;
     const pulse = document.querySelector(".pulse-text");
     const grid = document.getElementById("homeMarketGrid");
-    if (grid) {
-      grid.classList.add("market-loading");
-      if (!grid.classList.contains("market-grid")) grid.classList.add("market-grid");
-    }
+    if (grid) grid.classList.add("market-loading");
     if (pulse) pulse.textContent = "Updating live data…";
     try {
       this.market = await LexoraAPI.fetchMarket(force);
@@ -143,34 +147,51 @@ const LexoraApp = {
       this.updateLastRefresh();
       this.tickRefreshLabel();
       const src = document.getElementById("dataSource");
-      if (src) src.textContent = this.market.source.toUpperCase() + " · 5s instant";
-      const liveN = this.market.liveCount ?? Object.values(this.market.assets || {}).filter((a) => a.live).length;
+      const liveN =
+        this.market.liveCount ??
+        Object.values(this.market.assets || {}).filter((a) => a.live).length;
+      const total = Object.keys(this.market.assets || {}).length;
+      if (src) src.textContent = `${this.market.source.toUpperCase()} · ${liveN} live · 8s`;
       if (pulse) {
         pulse.textContent =
           this.market.source === "live"
-            ? `● INSTANT LIVE (${liveN} feeds)`
+            ? `● INSTANT LIVE (${liveN}/${total})`
             : this.market.source === "mixed"
-              ? `● LIVE (${liveN}/${Object.keys(this.market.assets).length})`
-              : "● OFFLINE — check network";
+              ? `● LIVE (${liveN}/${total})`
+              : `● ESTIMATE (${total} assets)`;
       }
       if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       if (this.currentPage === "prediction") this.loadPrediction(this.activePrediction);
       LexoraCharts.refreshAll(this.market);
-      this.loadQuickSignals();
-      this.loadMarketSignals();
+      setTimeout(() => {
+        this.loadQuickSignals();
+        this.loadMarketSignals();
+      }, 0);
     } catch (e) {
-      if (pulse) pulse.textContent = "Retry…";
+      if (pulse) pulse.textContent = "Retry in 8s…";
       console.error(e);
+      if (!this.market?.assets) {
+        this.market = LexoraAPI.finalizeMarket({});
+        this.updateMarketCards(this.market);
+        this.updateLastRefresh();
+      }
     } finally {
       if (grid) grid.classList.remove("market-loading");
+      this._marketRefreshInFlight = false;
+      if (this._pendingForceRefresh) {
+        this._pendingForceRefresh = false;
+        this.refreshMarketData(true);
+      }
     }
   },
 
   updateLastRefresh() {
     const c = document.getElementById("assetCount");
-    if (c && this.market) {
-      c.textContent = Object.keys(this.market.assets).length + " assets · instant 5s";
+    if (c && this.market?.assets) {
+      const n = Object.keys(this.market.assets).length;
+      const live = Object.values(this.market.assets).filter((a) => a.live).length;
+      c.textContent = `${n} assets · ${live} live · 8s refresh`;
     }
   },
 
@@ -236,6 +257,10 @@ const LexoraApp = {
         this.loadPrediction(a.dataset.gotoPred);
       });
     });
+    const stub = LexoraAPI.finalizeMarket({});
+    this.updateMarketCards(stub);
+    const c = document.getElementById("assetCount");
+    if (c) c.textContent = `${Object.keys(stub.assets).length} assets · loading live…`;
   },
 
   renderMarketsTable() {
@@ -331,35 +356,41 @@ const LexoraApp = {
     if (!box) return;
     this.activePrediction = symbol;
     box.innerHTML = '<p class="loading-spinner">Fetching live price & AI analysis…</p>';
-    await this.refreshAssetInstant(symbol);
+    if (!this.market?.assets) await this.refreshMarketData(true);
+    const refreshLive = this.refreshAssetInstant(symbol);
+    const runAi = LexoraAPI.predict(symbol, this.market);
+    await refreshLive;
     const liveAsset = this.market?.assets?.[symbol];
     const liveLine = liveAsset
       ? LexoraAPI.priceDisplay(symbol, liveAsset, this.currency)
       : { primary: "—", secondary: "" };
-    const p = await LexoraAPI.predict(symbol, this.market);
+    const p = await runAi;
     const updated = liveAsset?.updated
       ? new Date(liveAsset.updated).toLocaleTimeString()
       : "just now";
+    const spotBadge = liveAsset?.live !== false ? "LIVE" : "ESTIMATE";
     box.innerHTML = `
-      <p class="pred-live-strip">● LIVE spot ${liveLine.primary} <span>${liveLine.secondary}</span> · updated ${updated}</p>
+      <p class="pred-live-strip">● ${spotBadge} spot <strong>${liveLine.primary}</strong> <span>${liveLine.secondary}</span> · ${updated}</p>
+      <p class="pred-reason">${p.recommendation_reason || ""}</p>
       <div class="prediction-hero glass">
         <div class="pred-main">
           <h3>${LexoraAPI.label(symbol)}</h3>
-          <div class="current-price">${this.formatPrice(symbol, p.current_price)}</div>
+          <div class="current-price">${liveLine.primary}</div>
+          <div class="price-sub-cell">${liveLine.secondary || ""}</div>
           <div class="signal-large signal-${p.signal.toLowerCase()}">${p.signal}</div>
           <div class="confidence-bar"><div class="confidence-fill" style="width:${p.confidence}%"></div></div>
-          <span class="confidence-text">${p.confidence}% Confidence</span>
+          <span class="confidence-text">${p.confidence}% Confidence · ${p.recommendation}</span>
         </div>
         <div class="pred-metrics">
-          <div class="metric"><label>Expected</label><span>${this.formatPrice(symbol, p.expected_price)}</span></div>
+          <div class="metric"><label>Expected (USD)</label><span>${LexoraAPI.formatUsdSpot(p.expected_price)}</span></div>
           <div class="metric"><label>Trend</label><span class="trend-${p.trend}">${p.trend}</span></div>
           <div class="metric"><label>RSI</label><span>${p.rsi}</span></div>
           <div class="metric"><label>Volatility</label><span>${p.volatility}%</span></div>
           <div class="metric"><label>Sentiment</label><span>${p.sentiment?.label || "—"}</span></div>
-          <div class="metric"><label>Action</label><span>${p.recommendation}</span></div>
+          <div class="metric"><label>Action</label><span class="rec-${p.recommendation.toLowerCase()}">${p.recommendation}</span></div>
         </div>
       </div>
-      <div class="risk-meter-wrap glass"><h4>Risk</h4><div class="risk-meter"><div class="risk-fill" style="width:${p.risk_level}%"></div></div></div>
+      <div class="risk-meter-wrap glass"><h4>Risk ${p.risk_level}%</h4><div class="risk-meter"><div class="risk-fill" style="width:${p.risk_level}%"></div></div></div>
       <div class="chart-row">
         <div class="chart-card glass"><h4>History</h4><canvas id="historyChart"></canvas></div>
         <div class="chart-card glass"><h4>Forecast</h4><canvas id="forecastChart"></canvas></div>

@@ -301,8 +301,10 @@ def fetch_market_data():
 
     live_count = sum(1 for a in market["assets"].values() if a.get("live"))
     market["liveCount"] = live_count
+    market["liveCount"] = live_count
+    market["total"] = len(market["assets"])
     market["source"] = "live" if live_count >= 10 else "mixed" if live_count >= 5 else "offline"
-    market["refreshSec"] = 5
+    market["refreshSec"] = 8
     return market
 
 
