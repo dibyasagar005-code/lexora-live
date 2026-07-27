@@ -70,6 +70,9 @@ _cache_lock = threading.Lock()
 # Initialize AuthManager
 auth_manager = AuthManager(session)
 
+# Initialize database
+init_db()
+
 # Initialize Google OAuth
 google_oauth = None
 if os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"):
@@ -155,7 +158,7 @@ def auth_login():
     
     result = auth_manager.authenticate_email_password(email, password)
     if result["success"]:
-        return jsonify({"success": True, "redirect": url_for("index")})
+        return jsonify({"success": True, "redirect": "index.html"})
     return jsonify(result)
 
 
@@ -181,7 +184,7 @@ def auth_register():
     
     result = auth_manager.register_user(username, email, password)
     if result["success"]:
-        return jsonify({"success": True, "message": "Registration successful", "redirect": url_for("login")})
+        return jsonify({"success": True, "message": "Registration successful", "redirect": "login.html"})
     return jsonify(result)
 
 
@@ -232,7 +235,7 @@ def google_login():
     """Google OAuth login redirect."""
     if not google_oauth:
         flash("Google OAuth is not configured. Please contact administrator.", "error")
-        return redirect(url_for("login"))
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     auth_url = google_oauth.get_authorization_url()
     return redirect(auth_url)
@@ -243,12 +246,12 @@ def google_callback():
     """Google OAuth callback."""
     if not google_oauth:
         flash("Google OAuth is not configured.", "error")
-        return redirect(url_for("login"))
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     code = request.args.get("code")
     if not code:
         flash("Authorization failed. Please try again.", "error")
-        return redirect(url_for("login"))
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     try:
         # Exchange code for token
@@ -256,7 +259,7 @@ def google_callback():
         
         if "error" in token_response:
             flash(f"OAuth error: {token_response.get('error_description', token_response['error'])}", "error")
-            return redirect(url_for("login"))
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
         
         access_token = token_response.get("access_token")
         
@@ -269,7 +272,7 @@ def google_callback():
         
         if not google_id or not email:
             flash("Failed to get user information from Google.", "error")
-            return redirect(url_for("login"))
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
         
         # Authenticate or register user
         result = auth_manager.authenticate_google(google_id, email, name)
@@ -279,14 +282,14 @@ def google_callback():
                 flash(f"Welcome to LexorA, {name}!", "success")
             else:
                 flash(f"Welcome back, {name}!", "success")
-            return redirect(url_for("index"))
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/index.html")
         else:
             flash(result.get("error", "Authentication failed"), "error")
-            return redirect(url_for("login"))
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
             
     except Exception as e:
         flash(f"Authentication error: {str(e)}", "error")
-        return redirect(url_for("login"))
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
 
 
 @app.route("/auth/send-otp", methods=["POST", "OPTIONS"])
