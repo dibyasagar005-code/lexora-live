@@ -36,15 +36,15 @@
         <a href="#" class="nav-link" data-page="calculator"><span class="nav-icon">⊕</span> Calculator</a>
         <div class="nav-divider"></div>
         <div id="auth-nav-links">
-          <a href="/login" class="nav-link"><span class="nav-icon">🔐</span> Login</a>
-          <a href="/register" class="nav-link"><span class="nav-icon">📝</span> Register</a>
+          <a href="login.html" class="nav-link"><span class="nav-icon">🔐</span> Login</a>
+          <a href="register.html" class="nav-link"><span class="nav-icon">📝</span> Register</a>
         </div>
         <div id="user-nav-links" style="display: none;">
-          <a href="/dashboard" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
-          <a href="/watchlist" class="nav-link"><span class="nav-icon">⭐</span> Watchlist</a>
-          <a href="/history" class="nav-link"><span class="nav-icon">📈</span> History</a>
-          <a href="/settings" class="nav-link"><span class="nav-icon">⚙️</span> Settings</a>
-          <a href="/auth/logout" class="nav-link"><span class="nav-icon">🚪</span> Logout</a>
+          <a href="#" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
+          <a href="#" class="nav-link"><span class="nav-icon">⭐</span> Watchlist</a>
+          <a href="#" class="nav-link"><span class="nav-icon">📈</span> History</a>
+          <a href="#" class="nav-link"><span class="nav-icon">⚙️</span> Settings</a>
+          <a href="#" id="logout-btn" class="nav-link"><span class="nav-icon">🚪</span> Logout</a>
         </div>
       </nav>
       <div class="currency-switch glass">
@@ -309,6 +309,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       const authNavLinks = document.getElementById('auth-nav-links');
       const userNavLinks = document.getElementById('user-nav-links');
+      const logoutBtn = document.getElementById('logout-btn');
       
       // Check if user is logged in via data attribute
       const isLoggedIn = document.body.getAttribute('data-user-logged-in') === 'true';
@@ -319,6 +320,31 @@
       } else {
         authNavLinks.style.display = 'block';
         userNavLinks.style.display = 'none';
+      }
+      
+      // Logout functionality
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          try {
+            await fetch(`${window.API_BASE_URL}/auth/logout`, {
+              method: 'POST'
+            });
+            // Clear local storage/session
+            document.body.setAttribute('data-user-logged-in', 'false');
+            authNavLinks.style.display = 'block';
+            userNavLinks.style.display = 'none';
+            alert('Logged out successfully');
+            window.location.href = 'index.html';
+          } catch (error) {
+            console.error('Logout error:', error);
+            // Even if API fails, update UI
+            document.body.setAttribute('data-user-logged-in', 'false');
+            authNavLinks.style.display = 'block';
+            userNavLinks.style.display = 'none';
+            window.location.href = 'index.html';
+          }
+        });
       }
     });
   </script>

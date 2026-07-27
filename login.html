@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - LexorA</title>
+  <link rel="stylesheet" href="./static/style.css?v=10">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card glass">
+      <div class="auth-header">
+        <div class="logo-icon large">◈</div>
+        <h2>Welcome Back</h2>
+        <p>Sign in to your LexorA dashboard</p>
+      </div>
+      
+      <!-- Google OAuth - Primary Login -->
+      <a href="#" id="google-login-btn" class="btn btn-google btn-block btn-lg">
+        <svg width="20" height="20" viewBox="0 0 18 18">
+          <path d="M17.64 9.2c0-.637-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.715H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+          <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.159 6.656 3.58 9 3.58z" fill="#EA4335"/>
+        </svg>
+        Sign in with Google
+      </a>
+      
+      <div class="auth-divider">
+        <span>or continue with email</span>
+      </div>
+      
+      <!-- Tab Navigation -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="email">Email</button>
+        <button class="auth-tab" data-tab="phone">Phone</button>
+      </div>
+      
+      <!-- Email Login Form -->
+      <form id="email-login-form" class="auth-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required placeholder="you@email.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required placeholder="••••••••">
+        </div>
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" name="remember"> Remember me
+          </label>
+          <a href="#" id="forgot-password-link">Forgot password?</a>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Login</button>
+      </form>
+      
+      <!-- Phone Login Form -->
+      <form id="phone-login-form" class="auth-form" style="display: none;">
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" name="phone" required placeholder="+1234567890">
+        </div>
+        <button type="button" id="send-otp-btn" class="btn btn-outline btn-block">Send OTP</button>
+        <div id="otp-section" style="display: none;">
+          <div class="form-group">
+            <label for="otp">Enter OTP</label>
+            <input type="text" id="otp" name="otp" required placeholder="123456" maxlength="6">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Verify & Login</button>
+        </div>
+      </form>
+      
+      <p class="auth-switch">
+        New user? <a href="register.html">Create account</a>
+      </p>
+      
+      <p class="auth-switch">
+        <a href="index.html">← Back to Home</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div class="modal-backdrop" id="forgot-password-modal" aria-hidden="true">
+    <div class="modal-content glass">
+      <button type="button" class="modal-close" id="close-forgot-modal">×</button>
+      <h3>Reset Password</h3>
+      <p>Enter your email to receive a password reset link</p>
+      <form id="forgot-password-form">
+        <div class="form-group">
+          <label for="reset-email">Email</label>
+          <input type="email" id="reset-email" name="email" required placeholder="you@email.com">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Send Reset Link</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Backend API configuration - Update this URL when backend is deployed
+    window.API_BASE_URL = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+    
+    // Tab switching
+    document.querySelectorAll('.auth-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        const tabName = tab.dataset.tab;
+        document.getElementById('email-login-form').style.display = tabName === 'email' ? 'block' : 'none';
+        document.getElementById('phone-login-form').style.display = tabName === 'phone' ? 'block' : 'none';
+      });
+    });
+
+    // Forgot password modal
+    document.getElementById('forgot-password-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('forgot-password-modal').classList.add('visible');
+    });
+
+    document.getElementById('close-forgot-modal').addEventListener('click', () => {
+      document.getElementById('forgot-password-modal').classList.remove('visible');
+    });
+
+    document.getElementById('forgot-password-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'forgot-password-modal') {
+        e.target.classList.remove('visible');
+      }
+    });
+
+    // Google OAuth login
+    document.getElementById('google-login-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const googleAuthUrl = `${window.API_BASE_URL}/auth/google`;
+      window.location.href = googleAuthUrl;
+    });
+
+    // Email login
+    document.getElementById('email-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      
+      try {
+        const response = await fetch(`${window.API_BASE_URL}/auth/login`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          alert('Login successful!');
+          window.location.href = data.redirect || 'index.html';
+        } else {
+          alert(data.error || 'Login failed');
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        alert('Login failed. Please try again.');
+      }
+    });
+
+    // Send OTP
+    document.getElementById('send-otp-btn').addEventListener('click', async () => {
+      const phone = document.getElementById('phone').value;
+      if (!phone) return alert('Please enter phone number');
+      
+      try {
+        const formData = new FormData();
+        formData.append('phone', phone);
+        
+        const response = await fetch(`${window.API_BASE_URL}/auth/send-otp`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          document.getElementById('otp-section').style.display = 'block';
+          document.getElementById('send-otp-btn').style.display = 'none';
+        } else {
+          alert(data.error);
+        }
+      } catch (error) {
+        console.error('OTP error:', error);
+        alert('Failed to send OTP. Please try again.');
+      }
+    });
+
+    // Forgot password
+    document.getElementById('forgot-password-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      
+      try {
+        const response = await fetch(`${window.API_BASE_URL}/auth/forgot-password`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          alert(data.message);
+          document.getElementById('forgot-password-modal').classList.remove('visible');
+        } else {
+          alert(data.error);
+        }
+      } catch (error) {
+        console.error('Password reset error:', error);
+        alert('Failed to send reset link. Please try again.');
+      }
+    });
+  </script>
+</body>
+</html>
