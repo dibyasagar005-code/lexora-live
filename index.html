@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LexorA — Luxury Exchange Of Real-time Assets</title>
-  <link rel="stylesheet" href="static/style.css?v=10">
+  <link rel="stylesheet" href="./static/style.css?v=10">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body data-user-logged-in="{{ 'true' if user else 'false' }}">
+<body data-user-logged-in="false">
   <div class="news-ticker">
     <span class="ticker-label">LIVE</span>
     <div class="ticker-content" id="tickerContent">Loading…</div>
@@ -302,6 +302,9 @@
   </div>
   
   <script>
+    // Backend API configuration - Update this URL when backend is deployed
+    window.API_BASE_URL = 'https://lexora-live.onrender.com';
+    
     // Check authentication status and update navigation
     document.addEventListener('DOMContentLoaded', () => {
       const authNavLinks = document.getElementById('auth-nav-links');
@@ -320,8 +323,8 @@
     });
   </script>
   
-  <script src="static/api.js?v=10"></script>
-  <script src="static/charts.js?v=10"></script>
-  <script src="static/app.js?v=10"></script>
+  <script src="./static/api.js?v=10"></script>
+  <script src="./static/charts.js?v=10"></script>
+  <script src="./static/app.js?v=10"></script>
 </body>
 </html>
