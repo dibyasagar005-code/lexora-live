@@ -35,6 +35,7 @@ const LexoraAPI = {
     crude_oil: [35, 200], natural_gas: [1.5, 10], wheat: [400, 900], corn: [350, 800], soybeans: [900, 1800],
     // Stock Indices
     sp500: [3000, 9000], nasdaq: [10000, 35000], dow_jones: [30000, 45000], ftse_100: [6500, 8500], nikkei_225: [28000, 42000],
+    cac_40: [6000, 8500], hang_seng: [15000, 32000], shanghai_composite: [2500, 4000], nifty_50: [15000, 28000], sensex: [50000, 85000],
     // Individual Stocks
     apple: [100, 250], microsoft: [300, 500], google: [120, 200], amazon: [100, 200], tesla: [150, 400],
   },
@@ -52,6 +53,7 @@ const LexoraAPI = {
     crude_oil: 72, natural_gas: 2.8, wheat: 620, corn: 580, soybeans: 1150,
     // Stock Indices
     sp500: 5900, nasdaq: 19500, dow_jones: 39000, ftse_100: 7500, nikkei_225: 35000,
+    cac_40: 7200, hang_seng: 21000, shanghai_composite: 3200, nifty_50: 22000, sensex: 72000,
     // Individual Stocks
     apple: 175, microsoft: 420, google: 155, amazon: 175, tesla: 245,
   },
@@ -70,6 +72,7 @@ const LexoraAPI = {
     crude_oil: "Crude Oil", natural_gas: "Natural Gas", wheat: "Wheat", corn: "Corn", soybeans: "Soybeans",
     // Stock Indices
     sp500: "S&P 500", nasdaq: "NASDAQ", dow_jones: "Dow Jones", ftse_100: "FTSE 100", nikkei_225: "Nikkei 225",
+    cac_40: "CAC 40", hang_seng: "Hang Seng", shanghai_composite: "Shanghai Composite", nifty_50: "Nifty 50", sensex: "BSE Sensex",
     // Individual Stocks
     apple: "Apple", microsoft: "Microsoft", google: "Google", amazon: "Amazon", tesla: "Tesla",
   },
@@ -88,6 +91,7 @@ const LexoraAPI = {
     crude_oil: "CL=F", natural_gas: "NG=F", wheat: null, corn: null, soybeans: null,
     // Stock Indices
     sp500: "^GSPC", nasdaq: "^IXIC", dow_jones: "^DJI", ftse_100: "^FTSE", nikkei_225: "^N225",
+    cac_40: "^FCHI", hang_seng: "^HSI", shanghai_composite: "^SSEC", nifty_50: "^NSEI", sensex: "^BSESN",
     // Individual Stocks
     apple: "AAPL", microsoft: "MSFT", google: "GOOGL", amazon: "AMZN", tesla: "TSLA",
   },

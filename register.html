@@ -61,9 +61,11 @@
     </div>
   </div>
 
+  <script src="static/config.js"></script>
+  
   <script>
-    // Backend API configuration - Use localhost for local testing, change to Render URL when deployed
-    window.API_BASE_URL = window.API_BASE_URL || 'http://127.0.0.1:5000';
+    // Use centralized configuration
+    window.API_BASE_URL = window.LEXORA_CONFIG ? window.LEXORA_CONFIG.API_BASE_URL : 'http://127.0.0.1:5000';
     
     // Google OAuth registration
     document.getElementById('google-login-btn').addEventListener('click', (e) => {

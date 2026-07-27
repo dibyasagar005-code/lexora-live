@@ -52,6 +52,11 @@ PRICE_RANGES = {
     "dow_jones": (30000, 45000),
     "ftse_100": (6500, 8500),
     "nikkei_225": (28000, 42000),
+    "cac_40": (6000, 8500),
+    "hang_seng": (15000, 32000),
+    "shanghai_composite": (2500, 4000),
+    "nifty_50": (15000, 28000),
+    "sensex": (50000, 85000),
     # Individual Stocks
     "apple": (100, 250),
     "microsoft": (300, 500),
@@ -103,6 +108,11 @@ FALLBACK_PRICES = {
     "dow_jones": 39000.0,
     "ftse_100": 7500.0,
     "nikkei_225": 35000.0,
+    "cac_40": 7200.0,
+    "hang_seng": 21000.0,
+    "shanghai_composite": 3200.0,
+    "nifty_50": 22000.0,
+    "sensex": 72000.0,
     # Individual Stocks
     "apple": 175.0,
     "microsoft": 420.0,
@@ -154,6 +164,11 @@ YAHOO_TICKERS = {
     "dow_jones": "^DJI",
     "ftse_100": "^FTSE",
     "nikkei_225": "^N225",
+    "cac_40": "^FCHI",
+    "hang_seng": "^HSI",
+    "shanghai_composite": "^SSEC",
+    "nifty_50": "^NSEI",
+    "sensex": "^BSESN",
     # Individual Stocks
     "apple": "AAPL",
     "microsoft": "MSFT",
@@ -486,6 +501,28 @@ def fetch_crypto_coingecko_extended():
     return data
 
 
+def fetch_yahoo_stocks():
+    """Fetch individual stocks from Yahoo Finance with rate limit handling."""
+    data = {}
+    stocks = {
+        "apple": "AAPL",
+        "microsoft": "MSFT",
+        "google": "GOOGL",
+        "amazon": "AMZN",
+        "tesla": "TSLA",
+    }
+    for key, ticker in stocks.items():
+        try:
+            stock_data = fetch_yahoo_ticker(ticker, key)
+            if stock_data:
+                stock_data["live"] = True
+                stock_data["apiSource"] = "yahoo"
+                data[key] = stock_data
+        except Exception as e:
+            print(f"[API] Error fetching {ticker}: {e}")
+    return data
+
+
 def fetch_forex_extended():
     """Fetch extended forex data."""
     data = {}
@@ -600,6 +637,11 @@ def fetch_market_data():
     
     # Fetch extended forex
     market["assets"].update(fetch_forex_extended())
+
+    # Fetch stocks separately with rate limit handling
+    for stock, info in fetch_yahoo_stocks().items():
+        if _valid_price(stock, info["price"]):
+            market["assets"][stock] = info
 
     # Fill missing assets with fallback
     live_count = sum(1 for a in market["assets"].values() if a.get("live"))

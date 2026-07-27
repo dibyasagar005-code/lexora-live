@@ -40,9 +40,9 @@
           <a href="register.html" class="nav-link"><span class="nav-icon">📝</span> Register</a>
         </div>
         <div id="user-nav-links" style="display: none;">
-          <a href="#" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
-          <a href="#" class="nav-link"><span class="nav-icon">⭐</span> Watchlist</a>
-          <a href="#" class="nav-link"><span class="nav-icon">📈</span> History</a>
+          <a href="dashboard.html" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
+          <a href="watchlist.html" class="nav-link"><span class="nav-icon">⭐</span> Watchlist</a>
+          <a href="history.html" class="nav-link"><span class="nav-icon">📈</span> History</a>
           <a href="#" class="nav-link"><span class="nav-icon">⚙️</span> Settings</a>
           <a href="#" id="logout-btn" class="nav-link"><span class="nav-icon">🚪</span> Logout</a>
         </div>
@@ -301,18 +301,39 @@
     </div>
   </div>
   
+  <script src="static/config.js"></script>
+  <script src="static/api.js"></script>
+  <script src="static/charts.js"></script>
+  <script src="static/app.js"></script>
+  
   <script>
-    // Backend API configuration - Update this URL when backend is deployed
-    window.API_BASE_URL = 'https://lexora-live.onrender.com';
+    // Use centralized configuration
+    window.API_BASE_URL = window.LEXORA_CONFIG ? window.LEXORA_CONFIG.API_BASE_URL : 'http://127.0.0.1:5000';
     
     // Check authentication status and update navigation
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       const authNavLinks = document.getElementById('auth-nav-links');
       const userNavLinks = document.getElementById('user-nav-links');
       const logoutBtn = document.getElementById('logout-btn');
       
-      // Check if user is logged in via data attribute
-      const isLoggedIn = document.body.getAttribute('data-user-logged-in') === 'true';
+      // Check authentication status via API
+      let isLoggedIn = false;
+      try {
+        const response = await fetch(`${window.API_BASE_URL}/api/auth/status`, {
+          method: 'GET',
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          isLoggedIn = data.logged_in || false;
+          // Update data attribute
+          document.body.setAttribute('data-user-logged-in', isLoggedIn.toString());
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        // Fall back to data attribute
+        isLoggedIn = document.body.getAttribute('data-user-logged-in') === 'true';
+      }
       
       if (isLoggedIn) {
         authNavLinks.style.display = 'none';

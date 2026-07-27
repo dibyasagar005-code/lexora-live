@@ -188,6 +188,15 @@ def auth_register():
     return jsonify(result)
 
 
+@app.route("/api/auth/status")
+def api_auth_status():
+    """Check authentication status."""
+    return jsonify({
+        "logged_in": auth_manager.is_logged_in(),
+        "user_id": session.get("user_id")
+    })
+
+
 @app.route("/auth/logout", methods=["POST", "OPTIONS"])
 def auth_logout():
     """Handle logout request."""

@@ -170,12 +170,14 @@ const LexoraApp = {
         this.loadMarketSignals();
       }, 0);
     } catch (e) {
-      if (pulse) pulse.textContent = "Retry in 8s…";
-      console.error(e);
+      if (pulse) pulse.textContent = "Data unavailable - using estimates";
+      console.error("Market refresh error:", e);
       if (!this.market?.assets) {
         this.market = LexoraAPI.finalizeMarket({});
         this.updateMarketCards(this.market);
         this.updateLastRefresh();
+        const src = document.getElementById("dataSource");
+        if (src) src.textContent = "OFFLINE · Estimates · 30s";
       }
     } finally {
       if (grid) grid.classList.remove("market-loading");
