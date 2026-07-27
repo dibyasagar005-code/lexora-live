@@ -10,53 +10,171 @@ TIMEOUT = 12
 TROY_OZ_GRAMS = 31.1034768
 
 PRICE_RANGES = {
-    "gold": (1500, 6500),
-    "silver": (12, 120),
-    "platinum": (700, 3500),
+    # Precious Metals
+    "gold": (1500, 8000),
+    "silver": (12, 150),
+    "platinum": (700, 4000),
     "palladium": (800, 6000),
+    "rhodium": (1000, 15000),
+    # Industrial Metals
     "copper": (2, 15),
+    "aluminum": (1500, 3500),
+    "nickel": (10000, 35000),
+    "zinc": (2000, 5000),
+    "lead": (1500, 3500),
+    # Cryptocurrencies
     "bitcoin": (10000, 250000),
     "ethereum": (500, 25000),
-    "crude_oil": (35, 200),
-    "sp500": (3000, 9000),
-    "nasdaq": (10000, 35000),
+    "ripple": (0.2, 5),
+    "cardano": (0.2, 5),
+    "solana": (10, 300),
+    "dogecoin": (0.05, 2),
+    "polkadot": (3, 60),
+    "avalanche": (10, 200),
+    "chainlink": (5, 50),
+    # Forex Pairs
     "usd_inr": (70, 110),
     "eur_usd": (0.85, 1.25),
     "gbp_usd": (1.0, 1.45),
+    "usd_jpy": (100, 160),
+    "aud_usd": (0.55, 0.85),
+    "usd_cad": (1.2, 1.6),
+    "usd_chf": (0.85, 1.1),
+    # Commodities
+    "crude_oil": (35, 200),
+    "natural_gas": (1.5, 10),
+    "wheat": (400, 900),
+    "corn": (350, 800),
+    "soybeans": (900, 1800),
+    # Stock Indices
+    "sp500": (3000, 9000),
+    "nasdaq": (10000, 35000),
+    "dow_jones": (30000, 45000),
+    "ftse_100": (6500, 8500),
+    "nikkei_225": (28000, 42000),
+    # Individual Stocks
+    "apple": (100, 250),
+    "microsoft": (300, 500),
+    "google": (120, 200),
+    "amazon": (100, 200),
+    "tesla": (150, 400),
 }
 
 FALLBACK_PRICES = {
+    # Precious Metals
     "gold": 3340.0,
     "silver": 31.2,
     "platinum": 1020.0,
     "palladium": 980.0,
+    "rhodium": 4500.0,
+    # Industrial Metals
     "copper": 4.25,
+    "aluminum": 2400.0,
+    "nickel": 18000.0,
+    "zinc": 3200.0,
+    "lead": 2200.0,
+    # Cryptocurrencies
     "bitcoin": 97000.0,
     "ethereum": 3600.0,
-    "crude_oil": 72.0,
+    "ripple": 0.55,
+    "cardano": 0.45,
+    "solana": 145.0,
+    "dogecoin": 0.15,
+    "polkadot": 7.5,
+    "avalanche": 35.0,
+    "chainlink": 14.0,
+    # Forex Pairs
     "usd_inr": 83.5,
-    "sp500": 5900.0,
-    "nasdaq": 19500.0,
     "eur_usd": 1.08,
     "gbp_usd": 1.27,
+    "usd_jpy": 149.5,
+    "aud_usd": 0.65,
+    "usd_cad": 1.36,
+    "usd_chf": 0.88,
+    # Commodities
+    "crude_oil": 72.0,
+    "natural_gas": 2.8,
+    "wheat": 620.0,
+    "corn": 580.0,
+    "soybeans": 1150.0,
+    # Stock Indices
+    "sp500": 5900.0,
+    "nasdaq": 19500.0,
+    "dow_jones": 39000.0,
+    "ftse_100": 7500.0,
+    "nikkei_225": 35000.0,
+    # Individual Stocks
+    "apple": 175.0,
+    "microsoft": 420.0,
+    "google": 155.0,
+    "amazon": 175.0,
+    "tesla": 245.0,
 }
 
 YAHOO_TICKERS = {
+    # Precious Metals
     "gold": "GC=F",
     "silver": "SI=F",
     "platinum": "PL=F",
     "palladium": "PA=F",
+    "rhodium": None,
+    # Industrial Metals
     "copper": "HG=F",
+    "aluminum": None,
+    "nickel": None,
+    "zinc": None,
+    "lead": None,
+    # Cryptocurrencies
     "bitcoin": "BTC-USD",
     "ethereum": "ETH-USD",
+    "ripple": "XRP-USD",
+    "cardano": "ADA-USD",
+    "solana": "SOL-USD",
+    "dogecoin": "DOGE-USD",
+    "polkadot": "DOT-USD",
+    "avalanche": "AVAX-USD",
+    "chainlink": "LINK-USD",
+    # Forex Pairs
+    "usd_inr": "INR=X",
+    "eur_usd": "EURUSD=X",
+    "gbp_usd": "GBPUSD=X",
+    "usd_jpy": "USDJPY=X",
+    "aud_usd": "AUDUSD=X",
+    "usd_cad": "USDCAD=X",
+    "usd_chf": "USDCHF=X",
+    # Commodities
     "crude_oil": "CL=F",
+    "natural_gas": "NG=F",
+    "wheat": None,
+    "corn": None,
+    "soybeans": None,
+    # Stock Indices
     "sp500": "^GSPC",
     "nasdaq": "^IXIC",
+    "dow_jones": "^DJI",
+    "ftse_100": "^FTSE",
+    "nikkei_225": "^N225",
+    # Individual Stocks
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "google": "GOOGL",
+    "amazon": "AMZN",
+    "tesla": "TSLA",
 }
 
 YAHOO_ALT = {
     "gold": ["XAUUSD=X", "GC=F"],
     "silver": ["XAGUSD=X", "SI=F"],
+    "platinum": ["XPTUSD=X", "PL=F"],
+    "palladium": ["XPDUSD=X", "PA=F"],
+    "rhodium": ["XAU=X"],
+    "copper": ["HG=F"],
+    "aluminum": ["ALI=F"],
+    "nickel": ["LME:NSI"],
+    "natural_gas": ["NG=F"],
+    "wheat": ["ZW=F"],
+    "corn": ["ZC=F"],
+    "soybeans": ["ZS=F"],
 }
 
 
@@ -330,15 +448,145 @@ def fetch_frankfurter():
     return data
 
 
+def fetch_crypto_coingecko_extended():
+    """Fetch extended cryptocurrency data from CoinGecko."""
+    data = {}
+    crypto_ids = {
+        "bitcoin": "bitcoin",
+        "ethereum": "ethereum",
+        "ripple": "ripple",
+        "cardano": "cardano",
+        "solana": "solana",
+        "dogecoin": "dogecoin",
+        "polkadot": "polkadot",
+        "avalanche": "avalanche-2",
+        "chainlink": "chainlink",
+    }
+    try:
+        result = _safe_request(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={
+                "ids": ",".join(crypto_ids.values()),
+                "vs_currencies": "usd",
+                "include_24hr_change": "true",
+            },
+        )
+        if result:
+            for key, coin_id in crypto_ids.items():
+                if coin_id in result:
+                    data[key] = {
+                        "price": result[coin_id]["usd"],
+                        "change": result[coin_id].get("usd_24h_change", 0),
+                        "unit": "unit",
+                        "live": True,
+                        "apiSource": "coingecko",
+                    }
+    except Exception as e:
+        print(f"[API] CoinGecko extended error: {e}")
+    return data
+
+
+def fetch_forex_extended():
+    """Fetch extended forex data."""
+    data = {}
+    try:
+        result = _safe_request(
+            "https://api.frankfurter.app/latest",
+            params={"from": "USD", "to": "INR,EUR,GBP,JPY,AUD,CAD,CHF"},
+        )
+        if result and "rates" in result:
+            rates = result["rates"]
+            data["usd_inr"] = {
+                "price": rates.get("INR", FALLBACK_PRICES["usd_inr"]),
+                "change": 0,
+                "symbol": "USD/INR",
+                "unit": "rate",
+                "live": True,
+                "apiSource": "frankfurter",
+            }
+            if rates.get("EUR"):
+                data["eur_usd"] = {
+                    "price": round(1 / rates["EUR"], 4),
+                    "change": 0,
+                    "symbol": "EUR/USD",
+                    "unit": "rate",
+                    "live": True,
+                    "apiSource": "frankfurter",
+                }
+            if rates.get("GBP"):
+                data["gbp_usd"] = {
+                    "price": round(1 / rates["GBP"], 4),
+                    "change": 0,
+                    "symbol": "GBP/USD",
+                    "unit": "rate",
+                    "live": True,
+                    "apiSource": "frankfurter",
+                }
+            if rates.get("JPY"):
+                data["usd_jpy"] = {
+                    "price": rates.get("JPY", FALLBACK_PRICES["usd_jpy"]),
+                    "change": 0,
+                    "symbol": "USD/JPY",
+                    "unit": "rate",
+                    "live": True,
+                    "apiSource": "frankfurter",
+                }
+            if rates.get("AUD"):
+                data["aud_usd"] = {
+                    "price": rates.get("AUD", FALLBACK_PRICES["aud_usd"]),
+                    "change": 0,
+                    "symbol": "AUD/USD",
+                    "unit": "rate",
+                    "live": True,
+                    "apiSource": "frankfurter",
+                }
+            if rates.get("CAD"):
+                data["usd_cad"] = {
+                    "price": rates.get("CAD", FALLBACK_PRICES["usd_cad"]),
+                    "change": 0,
+                    "symbol": "USD/CAD",
+                    "unit": "rate",
+                    "live": True,
+                    "apiSource": "frankfurter",
+                }
+            if rates.get("CHF"):
+                data["usd_chf"] = {
+                    "price": rates.get("CHF", FALLBACK_PRICES["usd_chf"]),
+                    "change": 0,
+                    "symbol": "USD/CHF",
+                    "unit": "rate",
+                    "live": True,
+                    "apiSource": "frankfurter",
+                }
+    except Exception as e:
+        print(f"[API] Forex extended error: {e}")
+    return data
+
+
 def fetch_market_data():
     market = {
         "timestamp": datetime.utcnow().isoformat(),
         "source": "live",
         "assets": {},
-        "refreshSec": 10,
+        "refreshSec": 30,
     }
 
+    # Fetch existing assets
     market["assets"].update(fetch_yahoo_assets())
+    
+    # Fetch extended crypto
+    for coin, info in fetch_crypto_coingecko_extended().items():
+        if _valid_price(coin, info["price"]):
+            market["assets"][coin] = {
+                "price": info["price"],
+                "change": info.get("change", 0),
+                "symbol": coin.upper()[:3],
+                "unit": "unit",
+                "live": True,
+                "apiSource": info.get("apiSource", "coingecko"),
+            }
+    
+    # Fetch Binance for BTC/ETH (more reliable)
     for coin, info in fetch_crypto_binance().items():
         if _valid_price(coin, info["price"]):
             market["assets"][coin] = {
@@ -349,24 +597,15 @@ def fetch_market_data():
                 "live": True,
                 "apiSource": info.get("apiSource", "binance"),
             }
-    for coin, info in fetch_coingecko().items():
-        if coin in market["assets"] and market["assets"][coin].get("live"):
-            continue
-        if _valid_price(coin, info["price"]):
-            market["assets"][coin] = {
-                "price": info["price"],
-                "change": info.get("change", 0),
-                "symbol": coin.upper()[:3],
-                "unit": "unit",
-                "live": True,
-                "apiSource": "coingecko",
-            }
-    market["assets"].update(fetch_frankfurter())
+    
+    # Fetch extended forex
+    market["assets"].update(fetch_forex_extended())
 
+    # Fill missing assets with fallback
     live_count = sum(1 for a in market["assets"].values() if a.get("live"))
     for symbol, price in FALLBACK_PRICES.items():
         if symbol not in market["assets"] or not _valid_price(symbol, market["assets"][symbol]["price"]):
-            unit = "oz" if symbol in ("gold", "silver", "platinum", "palladium") else "lb" if symbol == "copper" else "unit"
+            unit = "oz" if symbol in ("gold", "silver", "platinum", "palladium", "rhodium") else "lb" if symbol in ("copper", "aluminum", "nickel", "zinc", "lead") else "unit"
             market["assets"][symbol] = {
                 "price": price,
                 "change": 0,
@@ -378,10 +617,9 @@ def fetch_market_data():
 
     live_count = sum(1 for a in market["assets"].values() if a.get("live"))
     market["liveCount"] = live_count
-    market["liveCount"] = live_count
     market["total"] = len(market["assets"])
-    market["source"] = "live" if live_count >= 10 else "mixed" if live_count >= 5 else "offline"
-    market["refreshSec"] = 8
+    market["source"] = "live" if live_count >= 20 else "mixed" if live_count >= 10 else "offline"
+    market["refreshSec"] = 30
     return market
 
 

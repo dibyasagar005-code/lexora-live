@@ -41,8 +41,14 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                password_hash TEXT,
+                phone TEXT UNIQUE,
+                google_id TEXT UNIQUE,
+                is_verified INTEGER DEFAULT 0,
+                reset_token TEXT,
+                reset_token_expiry TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
             )
         """)
 
@@ -222,12 +228,86 @@ def get_user_by_username(username):
     return dict(row) if row else None
 
 
-def create_user(username, email, password_hash):
+def get_user_by_email(email):
+    """Lookup user by email."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_phone(phone):
+    """Lookup user by phone."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE phone = ?", (phone,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_google_id(google_id):
+    """Lookup user by Google ID."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE google_id = ?", (google_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_user(username, email, password_hash=None, phone=None, google_id=None):
     """Register a new user."""
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-            (username, email, password_hash),
+            """INSERT INTO users (username, email, password_hash, phone, google_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            (username, email, password_hash, phone, google_id),
+        )
+
+
+def update_user_password(user_id, password_hash):
+    """Update user password."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id),
+        )
+
+
+def set_reset_token(user_id, token, expiry):
+    """Set password reset token."""
+    with get_db() as conn:
+        conn.execute(
+            """UPDATE users SET reset_token = ?, reset_token_expiry = ?
+               WHERE id = ?""",
+            (token, expiry, user_id),
+        )
+
+
+def clear_reset_token(user_id):
+    """Clear password reset token."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET reset_token = NULL, reset_token_expiry = NULL WHERE id = ?",
+            (user_id,),
+        )
+
+
+def verify_user(user_id):
+    """Mark user as verified."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET is_verified = 1 WHERE id = ?",
+            (user_id,),
+        )
+
+
+def update_last_login(user_id):
+    """Update user's last login timestamp."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?",
+            (user_id,),
         )
 
 

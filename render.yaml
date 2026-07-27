@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: lexora-live
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: SESSION_COOKIE_SECURE
+        value: "True"
+      - key: SESSION_HTTPONLY
+        value: "True"
+      - key: SESSION_SAMESITE
+        value: Lax
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APP_URL
+        sync: false

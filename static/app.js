@@ -26,6 +26,7 @@ const LexoraApp = {
     this.initMarketTabs();
     this.initCalculators();
     this.initPrediction();
+    this.initModal();
     this.renderMarketSkeleton();
     this.refreshMarketData().then(() => {
       if (document.querySelector('.page-view[data-page="prediction"]')) {
@@ -225,8 +226,9 @@ const LexoraApp = {
         if (changeEl) {
           const ch = Number(asset.change) || 0;
           const arrow = ch > 0 ? "▲" : ch < 0 ? "▼" : "●";
-          const label = asset.live !== false ? "live" : "est.";
-          changeEl.textContent = `${arrow} ${ch >= 0 ? "+" : ""}${ch.toFixed(2)}% ${label}`;
+          const isLive = asset.live !== false;
+          const statusText = isLive ? "live" : "offline";
+          changeEl.textContent = `${arrow} ${ch >= 0 ? "+" : ""}${ch.toFixed(2)}% ${statusText}`;
           changeEl.className = "card-change " + (ch > 0 ? "positive" : ch < 0 ? "negative" : "neutral");
         }
         const spotEl = card.querySelector(".card-spot");
@@ -243,7 +245,9 @@ const LexoraApp = {
     const grid = document.getElementById("homeMarketGrid");
     if (!grid) return;
     const symbols = Object.keys(LexoraAPI.FALLBACK);
-    grid.innerHTML = symbols.map((sym) => `
+    const featuredAssets = ["gold", "silver", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq", "tesla", "solana", "apple", "natural_gas", "usd_inr"];
+    const displayAssets = featuredAssets.filter(s => symbols.includes(s));
+    grid.innerHTML = displayAssets.map((sym) => `
       <div class="market-card" data-symbol="${sym}">
         <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="card-spot">LIVE</span></div>
         <div class="card-price-main">—</div>
@@ -270,20 +274,21 @@ const LexoraApp = {
       .map(([sym, a]) => {
         const d = LexoraAPI.priceDisplay(sym, a, this.currency);
         const ch = a.change || 0;
+        const isLive = a.live !== false;
+        const statusClass = isLive ? "spot-live" : "spot-offline";
+        const statusText = isLive ? "LIVE" : "OFFLINE";
         return `<tr data-symbol="${sym}">
         <td><strong>${LexoraAPI.label(sym)}</strong><br><small class="price-sub-cell">${d.secondary || ""}</small></td>
         <td class="price-cell"><span class="price-main-cell">${d.primary}</span></td>
         <td class="${ch >= 0 ? "positive" : "negative"}">${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%</td>
         <td><span class="signal-badge hold" data-signal="${sym}">—</span></td>
-        <td><button type="button" class="btn btn-sm btn-outline" data-analyze="${sym}">Analyze</button></td>
+        <td><button type="button" class="btn btn-sm btn-outline" data-analyze="${sym}">View Analysis</button></td>
       </tr>`;
       })
       .join("");
     body.querySelectorAll("[data-analyze]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".symbol-chip").forEach((c) => c.classList.toggle("active", c.dataset.sym === btn.dataset.analyze));
-        this.showPage("prediction");
-        this.loadPrediction(btn.dataset.analyze);
+        this.openAnalysisModal(btn.dataset.analyze);
       });
     });
     this.loadMarketSignals();
@@ -295,7 +300,8 @@ const LexoraApp = {
     try {
       const data = await LexoraAPI.predictAll(this.market);
       box.innerHTML = "";
-      ["gold", "silver", "platinum", "palladium", "copper", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq"].forEach((sym) => {
+      const featuredAssets = ["gold", "silver", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq", "tesla", "solana", "apple"];
+      featuredAssets.forEach((sym) => {
         const p = data[sym];
         if (!p) return;
         const d = document.createElement("div");
@@ -322,10 +328,12 @@ const LexoraApp = {
 
   initMarketTabs() {
     const cats = {
-      metals: ["gold", "silver", "platinum", "palladium", "copper"],
-      crypto: ["bitcoin", "ethereum"],
-      forex: ["usd_inr", "eur_usd", "gbp_usd"],
-      stocks: ["sp500", "nasdaq"],
+      metals: ["gold", "silver", "platinum", "palladium", "rhodium", "copper", "aluminum", "nickel", "zinc", "lead"],
+      crypto: ["bitcoin", "ethereum", "ripple", "cardano", "solana", "dogecoin", "polkadot", "avalanche", "chainlink"],
+      forex: ["usd_inr", "eur_usd", "gbp_usd", "usd_jpy", "aud_usd", "usd_cad", "usd_chf"],
+      commodities: ["crude_oil", "natural_gas", "wheat", "corn", "soybeans"],
+      indices: ["sp500", "nasdaq", "dow_jones", "ftse_100", "nikkei_225"],
+      stocks: ["apple", "microsoft", "google", "amazon", "tesla"],
     };
     document.querySelectorAll(".market-tabs .tab").forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -673,6 +681,81 @@ const LexoraApp = {
     }
     el.classList.add("calc-error");
     el.innerHTML = '<p class="calc-hint">Could not calculate. Check your inputs.</p>';
+  },
+
+  initModal() {
+    const modal = document.getElementById("analysisModal");
+    const closeBtn = document.getElementById("modalClose");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => this.closeAnalysisModal());
+    }
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) this.closeAnalysisModal();
+      });
+    }
+  },
+
+  async openAnalysisModal(symbol) {
+    const modal = document.getElementById("analysisModal");
+    const modalBody = document.getElementById("modalBody");
+    if (!modal || !modalBody) return;
+    
+    modal.classList.add("visible");
+    modalBody.innerHTML = '<p class="loading-spinner">Loading detailed analysis…</p>';
+    
+    try {
+      const prediction = await LexoraAPI.predict(symbol, this.market);
+      const asset = this.market?.assets?.[symbol];
+      const display = asset ? LexoraAPI.priceDisplay(symbol, asset, this.currency) : { primary: "—", secondary: "" };
+      const isLive = asset?.live !== false;
+      const statusBadge = isLive ? "LIVE" : "OFFLINE";
+      const statusClass = isLive ? "spot-live" : "spot-offline";
+      
+      modalBody.innerHTML = `
+        <div class="prediction-hero">
+          <div class="pred-main">
+            <h3>${LexoraAPI.label(symbol)}</h3>
+            <div class="current-price">${display.primary}</div>
+            <div class="price-sub-cell">${display.secondary || ""}</div>
+            <span class="card-spot ${statusClass}">${statusBadge}</span>
+            <div class="signal-large signal-${prediction.signal.toLowerCase()}">${prediction.signal}</div>
+            <div class="confidence-bar"><div class="confidence-fill" style="width:${prediction.confidence}%"></div></div>
+            <span class="confidence-text">${prediction.confidence}% Confidence · ${prediction.recommendation}</span>
+          </div>
+          <div class="pred-metrics">
+            <div class="metric"><label>Expected (USD)</label><span>${LexoraAPI.formatUsdSpot(prediction.expected_price)}</span></div>
+            <div class="metric"><label>Trend</label><span class="trend-${prediction.trend}">${prediction.trend}</span></div>
+            <div class="metric"><label>RSI</label><span>${prediction.rsi}</span></div>
+            <div class="metric"><label>Volatility</label><span>${prediction.volatility}%</span></div>
+            <div class="metric"><label>Sentiment</label><span>${prediction.sentiment?.label || "—"}</span></div>
+            <div class="metric"><label>Action</label><span class="rec-${prediction.recommendation.toLowerCase()}">${prediction.recommendation}</span></div>
+          </div>
+        </div>
+        <div class="risk-meter-wrap glass"><h4>Risk ${prediction.risk_level}%</h4><div class="risk-meter"><div class="risk-fill" style="width:${prediction.risk_level}%"></div></div></div>
+        <div class="chart-row">
+          <div class="chart-card glass"><h4>Historical Price</h4><canvas id="modalHistoryChart"></canvas></div>
+          <div class="chart-card glass"><h4>AI Forecast</h4><canvas id="modalForecastChart"></canvas></div>
+        </div>
+        <div class="chart-row">
+          <div class="chart-card glass full-width"><h4>Volatility Analysis</h4><canvas id="modalVolatilityChart"></canvas></div>
+        </div>
+      `;
+      
+      LexoraCharts.initHistoryChart("modalHistoryChart", prediction.historical);
+      LexoraCharts.initForecastChart("modalForecastChart", prediction.historical, prediction.forecast);
+      
+    } catch (e) {
+      modalBody.innerHTML = '<p class="loading-spinner">Error loading analysis. Please try again.</p>';
+      console.error(e);
+    }
+  },
+
+  closeAnalysisModal() {
+    const modal = document.getElementById("analysisModal");
+    if (modal) {
+      modal.classList.remove("visible");
+    }
   },
 };
 

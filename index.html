@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="static/style.css?v=10">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body data-user-logged-in="{{ 'true' if user else 'false' }}">
   <div class="news-ticker">
     <span class="ticker-label">LIVE</span>
     <div class="ticker-content" id="tickerContent">Loading…</div>
@@ -34,6 +34,18 @@
         <a href="#" class="nav-link" data-page="markets"><span class="nav-icon">◉</span> Live Markets</a>
         <a href="#" class="nav-link" data-page="prediction"><span class="nav-icon">◎</span> AI Prediction</a>
         <a href="#" class="nav-link" data-page="calculator"><span class="nav-icon">⊕</span> Calculator</a>
+        <div class="nav-divider"></div>
+        <div id="auth-nav-links">
+          <a href="/login" class="nav-link"><span class="nav-icon">🔐</span> Login</a>
+          <a href="/register" class="nav-link"><span class="nav-icon">📝</span> Register</a>
+        </div>
+        <div id="user-nav-links" style="display: none;">
+          <a href="/dashboard" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
+          <a href="/watchlist" class="nav-link"><span class="nav-icon">⭐</span> Watchlist</a>
+          <a href="/history" class="nav-link"><span class="nav-icon">📈</span> History</a>
+          <a href="/settings" class="nav-link"><span class="nav-icon">⚙️</span> Settings</a>
+          <a href="/auth/logout" class="nav-link"><span class="nav-icon">🚪</span> Logout</a>
+        </div>
       </nav>
       <div class="currency-switch glass">
         <label for="currencySelect">Display currency</label>
@@ -105,6 +117,8 @@
           <button class="tab" data-filter="metals">Metals</button>
           <button class="tab" data-filter="crypto">Crypto</button>
           <button class="tab" data-filter="forex">Forex</button>
+          <button class="tab" data-filter="commodities">Commodities</button>
+          <button class="tab" data-filter="indices">Indices</button>
           <button class="tab" data-filter="stocks">Stocks</button>
         </div>
         <div class="markets-table-wrap glass">
@@ -127,17 +141,38 @@
             <a href="#" class="symbol-chip" data-sym="silver">Silver</a>
             <a href="#" class="symbol-chip" data-sym="platinum">Platinum</a>
             <a href="#" class="symbol-chip" data-sym="palladium">Palladium</a>
+            <a href="#" class="symbol-chip" data-sym="rhodium">Rhodium</a>
             <a href="#" class="symbol-chip" data-sym="copper">Copper</a>
-            <a href="#" class="symbol-chip" data-sym="palladium">Palladium</a>
-            <a href="#" class="symbol-chip" data-sym="copper">Copper</a>
+            <a href="#" class="symbol-chip" data-sym="aluminum">Aluminum</a>
+            <a href="#" class="symbol-chip" data-sym="nickel">Nickel</a>
             <a href="#" class="symbol-chip" data-sym="bitcoin">Bitcoin</a>
             <a href="#" class="symbol-chip" data-sym="ethereum">Ethereum</a>
-            <a href="#" class="symbol-chip" data-sym="crude_oil">Crude Oil</a>
-            <a href="#" class="symbol-chip" data-sym="sp500">S&P 500</a>
-            <a href="#" class="symbol-chip" data-sym="nasdaq">NASDAQ</a>
+            <a href="#" class="symbol-chip" data-sym="ripple">Ripple</a>
+            <a href="#" class="symbol-chip" data-sym="solana">Solana</a>
+            <a href="#" class="symbol-chip" data-sym="cardano">Cardano</a>
+            <a href="#" class="symbol-chip" data-sym="dogecoin">Dogecoin</a>
+            <a href="#" class="symbol-chip" data-sym="polkadot">Polkadot</a>
+            <a href="#" class="symbol-chip" data-sym="avalanche">Avalanche</a>
+            <a href="#" class="symbol-chip" data-sym="chainlink">Chainlink</a>
             <a href="#" class="symbol-chip" data-sym="usd_inr">USD/INR</a>
             <a href="#" class="symbol-chip" data-sym="eur_usd">EUR/USD</a>
             <a href="#" class="symbol-chip" data-sym="gbp_usd">GBP/USD</a>
+            <a href="#" class="symbol-chip" data-sym="usd_jpy">USD/JPY</a>
+            <a href="#" class="symbol-chip" data-sym="aud_usd">AUD/USD</a>
+            <a href="#" class="symbol-chip" data-sym="crude_oil">Crude Oil</a>
+            <a href="#" class="symbol-chip" data-sym="natural_gas">Natural Gas</a>
+            <a href="#" class="symbol-chip" data-sym="wheat">Wheat</a>
+            <a href="#" class="symbol-chip" data-sym="corn">Corn</a>
+            <a href="#" class="symbol-chip" data-sym="sp500">S&P 500</a>
+            <a href="#" class="symbol-chip" data-sym="nasdaq">NASDAQ</a>
+            <a href="#" class="symbol-chip" data-sym="dow_jones">Dow Jones</a>
+            <a href="#" class="symbol-chip" data-sym="ftse_100">FTSE 100</a>
+            <a href="#" class="symbol-chip" data-sym="nikkei_225">Nikkei 225</a>
+            <a href="#" class="symbol-chip" data-sym="apple">Apple</a>
+            <a href="#" class="symbol-chip" data-sym="microsoft">Microsoft</a>
+            <a href="#" class="symbol-chip" data-sym="google">Google</a>
+            <a href="#" class="symbol-chip" data-sym="amazon">Amazon</a>
+            <a href="#" class="symbol-chip" data-sym="tesla">Tesla</a>
           </div>
         </section>
         <div id="predictionPanel"><p class="loading-spinner">Select asset…</p></div>
@@ -255,6 +290,36 @@
   </div>
 
   <a class="creator-credit" href="https://www.instagram.com/dibyasagar1297" target="_blank" rel="noopener">Made by @dibyasagar1297</a>
+  
+  <!-- Asset Analysis Modal -->
+  <div class="modal-backdrop" id="analysisModal" aria-hidden="true">
+    <div class="modal-content glass">
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+      <div id="modalBody">
+        <p class="loading-spinner">Loading analysis…</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Check authentication status and update navigation
+    document.addEventListener('DOMContentLoaded', () => {
+      const authNavLinks = document.getElementById('auth-nav-links');
+      const userNavLinks = document.getElementById('user-nav-links');
+      
+      // Check if user is logged in via data attribute
+      const isLoggedIn = document.body.getAttribute('data-user-logged-in') === 'true';
+      
+      if (isLoggedIn) {
+        authNavLinks.style.display = 'none';
+        userNavLinks.style.display = 'block';
+      } else {
+        authNavLinks.style.display = 'block';
+        userNavLinks.style.display = 'none';
+      }
+    });
+  </script>
+  
   <script src="static/api.js?v=10"></script>
   <script src="static/charts.js?v=10"></script>
   <script src="static/app.js?v=10"></script>

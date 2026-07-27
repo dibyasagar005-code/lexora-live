@@ -17,35 +17,93 @@ const LexoraAPI = {
   TIMEOUT: 8000,
   FETCH_TIMEOUT: 6000,
   TROY_OZ_GRAMS: 31.1034768,
-  METALS: ["gold", "silver", "platinum", "palladium"],
-  METAL_LB: ["copper"],
+  METALS: ["gold", "silver", "platinum", "palladium", "rhodium"],
+  METAL_LB: ["copper", "aluminum", "nickel", "zinc", "lead"],
   /** Reject bad API values (e.g. copper $/lb mistaken as gold $/oz) */
   PRICE_RANGES: {
-    gold: [2000, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000],
-    copper: [2, 15], bitcoin: [10000, 250000], ethereum: [500, 25000],
-    crude_oil: [35, 200], sp500: [3000, 9000], nasdaq: [10000, 35000],
-    usd_inr: [70, 110], eur_usd: [0.85, 1.25], gbp_usd: [1.0, 1.45],
+    // Precious Metals
+    gold: [1500, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000], rhodium: [1000, 15000],
+    // Industrial Metals
+    copper: [2, 15], aluminum: [1500, 3500], nickel: [10000, 35000], zinc: [2000, 5000], lead: [1500, 3500],
+    // Cryptocurrencies
+    bitcoin: [10000, 250000], ethereum: [500, 25000], ripple: [0.2, 5], cardano: [0.2, 5],
+    solana: [10, 300], dogecoin: [0.05, 2], polkadot: [3, 60], avalanche: [10, 200], chainlink: [5, 50],
+    // Forex Pairs
+    usd_inr: [70, 110], eur_usd: [0.85, 1.25], gbp_usd: [1.0, 1.45], usd_jpy: [100, 160],
+    aud_usd: [0.55, 0.85], usd_cad: [1.2, 1.6], usd_chf: [0.85, 1.1],
+    // Commodities
+    crude_oil: [35, 200], natural_gas: [1.5, 10], wheat: [400, 900], corn: [350, 800], soybeans: [900, 1800],
+    // Stock Indices
+    sp500: [3000, 9000], nasdaq: [10000, 35000], dow_jones: [30000, 45000], ftse_100: [6500, 8500], nikkei_225: [28000, 42000],
+    // Individual Stocks
+    apple: [100, 250], microsoft: [300, 500], google: [120, 200], amazon: [100, 200], tesla: [150, 400],
   },
   FALLBACK: {
-    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, copper: 4.25,
-    bitcoin: 97000, ethereum: 3600, crude_oil: 72, usd_inr: 83.5,
-    sp500: 5900, nasdaq: 19500, eur_usd: 1.08, gbp_usd: 1.27,
+    // Precious Metals
+    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, rhodium: 4500,
+    // Industrial Metals
+    copper: 4.25, aluminum: 2400, nickel: 18000, zinc: 3200, lead: 2200,
+    // Cryptocurrencies
+    bitcoin: 97000, ethereum: 3600, ripple: 0.55, cardano: 0.45, solana: 145,
+    dogecoin: 0.15, polkadot: 7.5, avalanche: 35, chainlink: 14,
+    // Forex Pairs
+    usd_inr: 83.5, eur_usd: 1.08, gbp_usd: 1.27, usd_jpy: 149.5, aud_usd: 0.65, usd_cad: 1.36, usd_chf: 0.88,
+    // Commodities
+    crude_oil: 72, natural_gas: 2.8, wheat: 620, corn: 580, soybeans: 1150,
+    // Stock Indices
+    sp500: 5900, nasdaq: 19500, dow_jones: 39000, ftse_100: 7500, nikkei_225: 35000,
+    // Individual Stocks
+    apple: 175, microsoft: 420, google: 155, amazon: 175, tesla: 245,
   },
   LABELS: {
-    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", copper: "Copper",
-    bitcoin: "Bitcoin", ethereum: "Ethereum", crude_oil: "Crude Oil", usd_inr: "USD/INR",
-    sp500: "S&P 500", nasdaq: "NASDAQ", eur_usd: "EUR/USD", gbp_usd: "GBP/USD",
+    // Precious Metals
+    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", rhodium: "Rhodium",
+    // Industrial Metals
+    copper: "Copper", aluminum: "Aluminum", nickel: "Nickel", zinc: "Zinc", lead: "Lead",
+    // Cryptocurrencies
+    bitcoin: "Bitcoin", ethereum: "Ethereum", ripple: "Ripple", cardano: "Cardano",
+    solana: "Solana", dogecoin: "Dogecoin", polkadot: "Polkadot", avalanche: "Avalanche", chainlink: "Chainlink",
+    // Forex Pairs
+    usd_inr: "USD/INR", eur_usd: "EUR/USD", gbp_usd: "GBP/USD", usd_jpy: "USD/JPY",
+    aud_usd: "AUD/USD", usd_cad: "USD/CAD", usd_chf: "USD/CHF",
+    // Commodities
+    crude_oil: "Crude Oil", natural_gas: "Natural Gas", wheat: "Wheat", corn: "Corn", soybeans: "Soybeans",
+    // Stock Indices
+    sp500: "S&P 500", nasdaq: "NASDAQ", dow_jones: "Dow Jones", ftse_100: "FTSE 100", nikkei_225: "Nikkei 225",
+    // Individual Stocks
+    apple: "Apple", microsoft: "Microsoft", google: "Google", amazon: "Amazon", tesla: "Tesla",
   },
   YAHOO: {
-    gold: "GC=F", silver: "SI=F", platinum: "PL=F", palladium: "PA=F", copper: "HG=F",
-    bitcoin: "BTC-USD", ethereum: "ETH-USD", crude_oil: "CL=F",
-    sp500: "^GSPC", nasdaq: "^IXIC",
+    // Precious Metals
+    gold: "GC=F", silver: "SI=F", platinum: "PL=F", palladium: "PA=F", rhodium: null,
+    // Industrial Metals
+    copper: "HG=F", aluminum: null, nickel: null, zinc: null, lead: null,
+    // Cryptocurrencies
+    bitcoin: "BTC-USD", ethereum: "ETH-USD", ripple: "XRP-USD", cardano: "ADA-USD",
+    solana: "SOL-USD", dogecoin: "DOGE-USD", polkadot: "DOT-USD", avalanche: "AVAX-USD", chainlink: "LINK-USD",
+    // Forex Pairs
+    usd_inr: "INR=X", eur_usd: "EURUSD=X", gbp_usd: "GBPUSD=X", usd_jpy: "USDJPY=X",
+    aud_usd: "AUDUSD=X", usd_cad: "USDCAD=X", usd_chf: "USDCHF=X",
+    // Commodities
+    crude_oil: "CL=F", natural_gas: "NG=F", wheat: null, corn: null, soybeans: null,
+    // Stock Indices
+    sp500: "^GSPC", nasdaq: "^IXIC", dow_jones: "^DJI", ftse_100: "^FTSE", nikkei_225: "^N225",
+    // Individual Stocks
+    apple: "AAPL", microsoft: "MSFT", google: "GOOGL", amazon: "AMZN", tesla: "TSLA",
   },
   YAHOO_ALT: {
     gold: ["XAUUSD=X", "GC=F"],
     silver: ["XAGUSD=X", "SI=F"],
-    platinum: ["PL=F", "XPTUSD=X"],
-    palladium: ["PA=F", "XPDUSD=X"],
+    platinum: ["XPTUSD=X", "PL=F"],
+    palladium: ["XPDUSD=X", "PA=F"],
+    rhodium: ["XAU=X"],
+    copper: ["HG=F"],
+    aluminum: ["ALI=F"],
+    nickel: ["LME:NSI"],
+    natural_gas: ["NG=F"],
+    wheat: ["ZW=F"],
+    corn: ["ZC=F"],
+    soybeans: ["ZS=F"],
   },
   _lastPrices: {},
   _sessionBase: null,
@@ -690,8 +748,8 @@ const LexoraAPI = {
   /** Extra assets with per-call timeout (non-blocking feel) */
   async fetchMarketExtras() {
     const out = {};
-    const metalKeys = ["platinum", "palladium", "copper"];
-    const stockKeys = ["sp500", "nasdaq", "crude_oil"];
+    const metalKeys = ["platinum", "palladium", "copper", "aluminum", "nickel", "zinc", "lead"];
+    const stockKeys = ["sp500", "nasdaq", "crude_oil", "natural_gas", "dow_jones", "ftse_100", "nikkei_225", "apple", "microsoft", "google", "amazon", "tesla"];
     await Promise.all(
       [...metalKeys, ...stockKeys].map(async (key) => {
         const y = await this.withTimeout(this.fetchYahoo(key, true), 5000).catch(() => null);
@@ -961,16 +1019,12 @@ const LexoraAPI = {
     }
     const m = market || (typeof LexoraApp !== "undefined" ? LexoraApp.market : null);
     const syms = [
-      "gold",
-      "silver",
-      "platinum",
-      "palladium",
-      "copper",
-      "bitcoin",
-      "ethereum",
-      "crude_oil",
-      "sp500",
-      "nasdaq",
+      "gold", "silver", "platinum", "palladium", "rhodium",
+      "copper", "aluminum", "nickel", "zinc", "lead",
+      "bitcoin", "ethereum", "ripple", "cardano", "solana", "dogecoin", "polkadot", "avalanche", "chainlink",
+      "crude_oil", "natural_gas", "wheat", "corn", "soybeans",
+      "sp500", "nasdaq", "dow_jones", "ftse_100", "nikkei_225",
+      "apple", "microsoft", "google", "amazon", "tesla",
     ];
     const pairs = await Promise.all(
       syms.map(async (s) => {

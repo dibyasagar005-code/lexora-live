@@ -83,14 +83,15 @@ body {
     z-index: 100;
     transition: transform 0.3s;
 }
-.sidebar-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.sidebar-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .sidebar-brand h1 {
     font-size: 1.4rem;
     background: linear-gradient(135deg, var(--cyan), var(--gold));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
-.tagline { font-size: 11px; color: var(--text-muted); }
+.tagline { font-size: 10px; color: var(--text-muted); line-height: 1.2; }
 .logo-icon {
     font-size: 2rem;
     color: var(--cyan);
@@ -542,4 +543,287 @@ body {
     .mobile-menu-btn { display: block; }
     .prediction-hero { grid-template-columns: 1fr; }
     .chart-row { grid-template-columns: 1fr; }
+    .modal-content { padding: 20px; max-height: 95vh; }
+    .symbol-selector { gap: 6px; }
+    .symbol-chip { padding: 6px 12px; font-size: 12px; }
+    .market-tabs .tab { padding: 8px 16px; font-size: 13px; }
+    .sidebar-brand { gap: 6px; margin-bottom: 12px; }
+    .sidebar-brand h1 { font-size: 1.2rem; }
+    .tagline { font-size: 9px; }
+    .logo-icon { font-size: 1.6rem; }
 }
+
+@media (max-width: 600px) {
+    .main-content { padding: 16px; padding-top: 60px; }
+    .hero-grid { grid-template-columns: 1fr; }
+    .market-grid { grid-template-columns: 1fr; }
+    .signals-grid { grid-template-columns: 1fr; }
+    .modal-content { padding: 16px; margin: 10px; }
+    .modal-backdrop { padding: 10px; }
+    .pred-metrics { grid-template-columns: 1fr; }
+    .chart-row { grid-template-columns: 1fr; }
+    .markets-table { font-size: 13px; }
+    .markets-table th, .markets-table td { padding: 10px 8px; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.modal-backdrop.visible { display: flex; }
+.modal-content {
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    padding: 32px;
+}
+.modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 68, 102, 0.2);
+    border: 1px solid var(--negative);
+    color: var(--negative);
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.modal-close:hover {
+    background: var(--negative);
+    color: var(--bg-dark);
+}
+
+/* Market status badges */
+.card-spot {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+.spot-live {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--positive);
+}
+.spot-offline {
+    background: rgba(255, 68, 102, 0.2);
+    color: var(--negative);
+}
+.market-closed {
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--hold);
+}
+
+/* Enhanced market cards */
+.price-main-cell {
+    font-weight: 700;
+    color: var(--text);
+}
+.price-sub-cell {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+/* Authentication Styles */
+.auth-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.auth-card {
+    max-width: 420px;
+    width: 100%;
+    padding: 40px;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.auth-header h2 {
+    font-size: 1.8rem;
+    margin: 16px 0 8px;
+    background: linear-gradient(135deg, var(--cyan), var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.auth-header p {
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auth-tab:hover {
+    border-color: var(--cyan);
+    color: var(--text);
+}
+
+.auth-tab.active {
+    background: var(--cyan);
+    border-color: var(--cyan);
+    color: var(--bg-dark);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.auth-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.auth-form label {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.auth-form input {
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--text);
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.auth-form input:focus {
+    outline: none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+}
+
+.auth-form .checkbox-group {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.auth-form .checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.auth-form .checkbox-group input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+}
+
+.auth-form .checkbox-group a {
+    color: var(--cyan);
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.auth-form .checkbox-group a:hover {
+    text-decoration: underline;
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 24px 0;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: white;
+    color: #333;
+    border: 1px solid var(--border);
+}
+
+.btn-google:hover {
+    background: #f8f8f8;
+}
+
+.btn-lg {
+    padding: 14px 20px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 24px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.auth-switch a {
+    color: var(--cyan);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.nav-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 12px 0;
+}
+

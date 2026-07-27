@@ -15,12 +15,17 @@ from flask import (
     session, jsonify, flash,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from dotenv import load_dotenv
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Load environment variables
+load_dotenv()
+
 from models.database import (
-    init_db, get_user_by_username, create_user, log_user_action,
+    init_db, get_user_by_username, get_user_by_email, create_user, log_user_action,
     get_watchlist, add_to_watchlist, remove_from_watchlist,
     get_portfolio, add_portfolio_item, get_notifications, add_notification,
     get_price_history, get_predictions, get_db,
@@ -29,6 +34,7 @@ from api.market_data import fetch_market_data
 from data.curation import run_curation_cycle, get_curated_history, generate_prediction
 from ai.predictor import run_prediction, predict_all_assets, sentiment_analysis
 from api.market_data import get_historical_prices
+from auth.auth import AuthManager, hash_password, verify_password, generate_reset_token, GoogleOAuth
 
 # ---------------------------------------------------------------------------
 # Flask app configuration
@@ -36,10 +42,43 @@ from api.market_data import get_historical_prices
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "lexora-ai-market-predictor-2024-secret")
 app.config["SESSION_PERMANENT"] = True
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "False") == "True"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
 
 # In-memory cache for live market data (refreshed by background thread)
 _market_cache = {"data": None, "updated": None}
 _cache_lock = threading.Lock()
+
+# Initialize AuthManager
+auth_manager = AuthManager(session)
+
+# Initialize Google OAuth
+google_oauth = None
+if os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"):
+    google_oauth = GoogleOAuth(
+        client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+        client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+        redirect_uri=os.environ.get("APP_URL", "http://localhost:5000") + "/auth/google/callback"
+    )
+
+
+# Flask-Login user loader
+@login_manager.user_loader
+def load_user(user_id):
+    """Load user for Flask-Login."""
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row:
+        return type('User', (object,), dict(row))()
+    return None
 
 
 def login_required(f):
@@ -76,54 +115,198 @@ def refresh_market_background():
 
 
 # ---------------------------------------------------------------------------
+# Authentication routes
+# ---------------------------------------------------------------------------
+@app.route("/login")
+def login():
+    """Login page."""
+    return render_template("login.html")
+
+
+@app.route("/register")
+def register():
+    """Registration page."""
+    return render_template("register.html")
+
+
+@app.route("/auth/login", methods=["POST"])
+def auth_login():
+    """Handle login request."""
+    email = request.form.get("email")
+    password = request.form.get("password")
+    remember = request.form.get("remember") == "on"
+    
+    if not email or not password:
+        return jsonify({"success": False, "error": "Email and password are required"})
+    
+    result = auth_manager.authenticate_email_password(email, password)
+    if result["success"]:
+        return jsonify({"success": True, "redirect": url_for("index")})
+    return jsonify(result)
+
+
+@app.route("/auth/register", methods=["POST"])
+def auth_register():
+    """Handle registration request."""
+    username = request.form.get("username")
+    email = request.form.get("email")
+    password = request.form.get("password")
+    confirm_password = request.form.get("confirm_password")
+    
+    if not all([username, email, password, confirm_password]):
+        return jsonify({"success": False, "error": "All fields are required"})
+    
+    if password != confirm_password:
+        return jsonify({"success": False, "error": "Passwords do not match"})
+    
+    if len(password) < 8:
+        return jsonify({"success": False, "error": "Password must be at least 8 characters"})
+    
+    result = auth_manager.register_user(username, email, password)
+    if result["success"]:
+        return jsonify({"success": True, "message": "Registration successful", "redirect": url_for("login")})
+    return jsonify(result)
+
+
+@app.route("/auth/logout")
+def auth_logout():
+    """Handle logout request."""
+    auth_manager.logout_user()
+    return redirect(url_for("login"))
+
+
+@app.route("/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    """Handle forgot password request."""
+    email = request.form.get("email")
+    if not email:
+        return jsonify({"success": False, "error": "Email is required"})
+    
+    result = auth_manager.initiate_password_reset(email)
+    if result["success"]:
+        # In production, send email with reset link
+        return jsonify({"success": True, "message": "Password reset link sent to your email"})
+    return jsonify(result)
+
+
+@app.route("/auth/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """Handle password reset with token."""
+    if request.method == "GET":
+        return render_template("reset_password.html", token=token)
+    
+    new_password = request.form.get("password")
+    confirm_password = request.form.get("confirm_password")
+    
+    if not new_password or new_password != confirm_password:
+        return jsonify({"success": False, "error": "Passwords do not match"})
+    
+    # Validate token and reset password
+    return jsonify({"success": False, "error": "Token validation not implemented yet"})
+
+
+@app.route("/auth/google")
+def google_login():
+    """Google OAuth login redirect."""
+    if not google_oauth:
+        flash("Google OAuth is not configured. Please contact administrator.", "error")
+        return redirect(url_for("login"))
+    
+    auth_url = google_oauth.get_authorization_url()
+    return redirect(auth_url)
+
+
+@app.route("/auth/google/callback")
+def google_callback():
+    """Google OAuth callback."""
+    if not google_oauth:
+        flash("Google OAuth is not configured.", "error")
+        return redirect(url_for("login"))
+    
+    code = request.args.get("code")
+    if not code:
+        flash("Authorization failed. Please try again.", "error")
+        return redirect(url_for("login"))
+    
+    try:
+        # Exchange code for token
+        token_response = google_oauth.exchange_code_for_token(code)
+        
+        if "error" in token_response:
+            flash(f"OAuth error: {token_response.get('error_description', token_response['error'])}", "error")
+            return redirect(url_for("login"))
+        
+        access_token = token_response.get("access_token")
+        
+        # Get user info
+        user_info = google_oauth.get_user_info(access_token)
+        
+        google_id = user_info.get("sub")
+        email = user_info.get("email")
+        name = user_info.get("name")
+        
+        if not google_id or not email:
+            flash("Failed to get user information from Google.", "error")
+            return redirect(url_for("login"))
+        
+        # Authenticate or register user
+        result = auth_manager.authenticate_google(google_id, email, name)
+        
+        if result["success"]:
+            if result.get("new_user"):
+                flash(f"Welcome to LexorA, {name}!", "success")
+            else:
+                flash(f"Welcome back, {name}!", "success")
+            return redirect(url_for("index"))
+        else:
+            flash(result.get("error", "Authentication failed"), "error")
+            return redirect(url_for("login"))
+            
+    except Exception as e:
+        flash(f"Authentication error: {str(e)}", "error")
+        return redirect(url_for("login"))
+
+
+@app.route("/auth/send-otp", methods=["POST"])
+def send_otp():
+    """Send OTP to phone number."""
+    phone = request.form.get("phone")
+    if not phone:
+        return jsonify({"success": False, "error": "Phone number is required"})
+    
+    # Will be implemented with Twilio
+    return jsonify({"success": False, "error": "OTP service not configured yet"})
+
+
+@app.route("/auth/verify-otp", methods=["POST"])
+def verify_otp():
+    """Verify OTP code."""
+    phone = request.form.get("phone")
+    otp = request.form.get("otp")
+    
+    if not phone or not otp:
+        return jsonify({"success": False, "error": "Phone and OTP are required"})
+    
+    # Will be implemented with pyotp
+    return jsonify({"success": False, "error": "OTP verification not implemented yet"})
+
+
+# ---------------------------------------------------------------------------
 # Page routes
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    """Home page with market overview."""
+    """Home page with market overview - accessible without login."""
     market = get_cached_market()
-    return render_template("index.html", market=market, user=session.get("username"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    """User login with session management."""
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        user = get_user_by_username(username)
-        if user and check_password_hash(user["password_hash"], password):
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
-            log_user_action(user["id"], "login", f"User {username} logged in")
-            flash("Welcome back to LexorA!", "success")
-            return redirect(url_for("dashboard"))
-        flash("Invalid username or password.", "error")
-    return render_template("login.html")
-
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    """User registration."""
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        email = request.form.get("email", "").strip()
-        password = request.form.get("password", "")
-        confirm = request.form.get("confirm_password", "")
-        if not username or not email or not password:
-            flash("All fields are required.", "error")
-        elif password != confirm:
-            flash("Passwords do not match.", "error")
-        elif len(password) < 6:
-            flash("Password must be at least 6 characters.", "error")
-        else:
-            try:
-                create_user(username, email, generate_password_hash(password))
-                flash("Registration successful! Please log in.", "success")
-                return redirect(url_for("login"))
-            except Exception:
-                flash("Username or email already exists.", "error")
-    return render_template("login.html", register=True)
+    user_id = session.get("user_id")
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row:
+                user = dict(row)
+    return render_template("index.html", market=market, user=user)
 
 
 @app.route("/logout")
@@ -138,23 +321,39 @@ def logout():
 
 @app.route("/markets")
 def markets():
-    """Live markets page."""
+    """Live markets page - accessible without login."""
     market = get_cached_market()
-    return render_template("markets.html", market=market, user=session.get("username"))
+    user_id = session.get("user_id")
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row:
+                user = dict(row)
+    return render_template("markets.html", market=market, user=user)
 
 
 @app.route("/prediction")
 @app.route("/prediction/<symbol>")
 def prediction(symbol="bitcoin"):
-    """AI prediction page for a specific asset."""
+    """AI prediction page for a specific asset - accessible without login."""
     pred = run_prediction(symbol)
     market = get_cached_market()
+    user_id = session.get("user_id")
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row:
+                user = dict(row)
     return render_template(
         "prediction.html",
         prediction=pred,
         symbol=symbol,
         market=market,
-        user=session.get("username"),
+        user=user,
     )
 
 
@@ -162,11 +361,16 @@ def prediction(symbol="bitcoin"):
 @login_required
 def dashboard():
     """User dashboard with portfolio and predictions."""
+    user_id = session.get("user_id")
     predictions = get_predictions(limit=10)
-    portfolio = get_portfolio(session["user_id"])
-    watchlist = get_watchlist(session["user_id"])
-    notifications = get_notifications(session["user_id"])
+    portfolio = get_portfolio(user_id)
+    watchlist = get_watchlist(user_id)
+    notifications = get_notifications(user_id)
     market = get_cached_market()
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
     return render_template(
         "dashboard.html",
         predictions=predictions,
@@ -174,44 +378,46 @@ def dashboard():
         watchlist=watchlist,
         notifications=notifications,
         market=market,
-        user=session.get("username"),
+        user=user,
     )
 
 
+@app.route("/watchlist")
+@login_required
+def watchlist():
+    """User watchlist page."""
+    user_id = session.get("user_id")
+    watchlist = get_watchlist(user_id)
+    market = get_cached_market()
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
+    return render_template("watchlist.html", watchlist=watchlist, market=market, user=user)
+
+
 @app.route("/history")
+@login_required
 def history():
-    """Price and prediction history."""
+    """Price and prediction history - requires login."""
+    user_id = session.get("user_id")
     symbol = request.args.get("symbol", "bitcoin")
     prices = get_price_history(symbol, limit=100)
     predictions = get_predictions(symbol, limit=20)
     curated = get_curated_history(symbol, limit=50)
+    market = get_cached_market()
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
     return render_template(
         "history.html",
         prices=prices,
         predictions=predictions,
         curated=curated,
         symbol=symbol,
-        user=session.get("username"),
-    )
-
-
-@app.route("/calculator")
-def calculator():
-    """Investment calculators page."""
-    return render_template("calculator.html", user=session.get("username"))
-
-
-@app.route("/watchlist")
-@login_required
-def watchlist_page():
-    """User watchlist management."""
-    watchlist = get_watchlist(session["user_id"])
-    market = get_cached_market()
-    return render_template(
-        "watchlist.html",
-        watchlist=watchlist,
         market=market,
-        user=session.get("username"),
+        user=user,
     )
 
 
@@ -219,7 +425,28 @@ def watchlist_page():
 @login_required
 def settings():
     """User settings page."""
-    return render_template("settings.html", user=session.get("username"))
+    user_id = session.get("user_id")
+    market = get_cached_market()
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
+    return render_template("settings.html", market=market, user=user)
+
+
+@app.route("/calculator")
+def calculator():
+    """Investment calculators page - accessible without login."""
+    market = get_cached_market()
+    user_id = session.get("user_id")
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row:
+                user = dict(row)
+    return render_template("calculator.html", market=market, user=user)
 
 
 # ---------------------------------------------------------------------------
