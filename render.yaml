@@ -16,7 +16,9 @@ services:
       - key: SESSION_HTTPONLY
         value: "True"
       - key: SESSION_SAMESITE
-        value: Lax
+        value: None
+      - key: FRONTEND_URL
+        value: https://dibyasagar005-code.github.io/lexora-live
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

@@ -100,7 +100,9 @@
       try {
         const response = await fetch(`${window.API_BASE_URL}/auth/register`, {
           method: 'POST',
-          body: formData
+          body: formData,
+          credentials: 'include',
+          mode: 'cors'
         });
         const data = await response.json();
         

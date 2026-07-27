@@ -14,6 +14,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     session, jsonify, flash,
 )
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from dotenv import load_dotenv
@@ -44,7 +45,17 @@ app.secret_key = os.environ.get("SECRET_KEY", "lexora-ai-market-predictor-2024-s
 app.config["SESSION_PERMANENT"] = True
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "False") == "True"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SAMESITE"] = "None"  # Changed for cross-origin requests
+
+# Initialize CORS for cross-origin requests
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -129,9 +140,12 @@ def register():
     return render_template("register.html")
 
 
-@app.route("/auth/login", methods=["POST"])
+@app.route("/auth/login", methods=["POST", "OPTIONS"])
 def auth_login():
     """Handle login request."""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True})
+    
     email = request.form.get("email")
     password = request.form.get("password")
     remember = request.form.get("remember") == "on"
@@ -145,9 +159,12 @@ def auth_login():
     return jsonify(result)
 
 
-@app.route("/auth/register", methods=["POST"])
+@app.route("/auth/register", methods=["POST", "OPTIONS"])
 def auth_register():
     """Handle registration request."""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True})
+    
     username = request.form.get("username")
     email = request.form.get("email")
     password = request.form.get("password")
@@ -168,23 +185,28 @@ def auth_register():
     return jsonify(result)
 
 
-@app.route("/auth/logout")
+@app.route("/auth/logout", methods=["POST", "OPTIONS"])
 def auth_logout():
     """Handle logout request."""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True})
+    
     auth_manager.logout_user()
-    return redirect(url_for("login"))
+    return jsonify({"success": True, "message": "Logged out successfully"})
 
 
-@app.route("/auth/forgot-password", methods=["POST"])
+@app.route("/auth/forgot-password", methods=["POST", "OPTIONS"])
 def forgot_password():
     """Handle forgot password request."""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True})
+    
     email = request.form.get("email")
     if not email:
         return jsonify({"success": False, "error": "Email is required"})
     
     result = auth_manager.initiate_password_reset(email)
     if result["success"]:
-        # In production, send email with reset link
         return jsonify({"success": True, "message": "Password reset link sent to your email"})
     return jsonify(result)
 
@@ -267,9 +289,12 @@ def google_callback():
         return redirect(url_for("login"))
 
 
-@app.route("/auth/send-otp", methods=["POST"])
+@app.route("/auth/send-otp", methods=["POST", "OPTIONS"])
 def send_otp():
     """Send OTP to phone number."""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True})
+    
     phone = request.form.get("phone")
     if not phone:
         return jsonify({"success": False, "error": "Phone number is required"})
@@ -278,9 +303,12 @@ def send_otp():
     return jsonify({"success": False, "error": "OTP service not configured yet"})
 
 
-@app.route("/auth/verify-otp", methods=["POST"])
+@app.route("/auth/verify-otp", methods=["POST", "OPTIONS"])
 def verify_otp():
     """Verify OTP code."""
+    if request.method == "OPTIONS":
+        return jsonify({"success": True})
+    
     phone = request.form.get("phone")
     otp = request.form.get("otp")
     
