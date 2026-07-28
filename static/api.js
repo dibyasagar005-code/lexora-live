@@ -779,8 +779,10 @@ const LexoraAPI = {
   /** Main market fetch — static APIs only for GitHub Pages */
   async fetchMarket(force = false) {
     // Use static APIs only for GitHub Pages deployment
+    console.log("Starting fetchMarket, force:", force);
     const assets = {};
     const fast = await this.fetchMarketFastLane();
+    console.log("Fast lane data:", fast);
 
     if (fast.gold) this.putMarketAsset(assets, "gold", fast.gold, true);
     if (fast.silver) this.putMarketAsset(assets, "silver", fast.silver, true);
