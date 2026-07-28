@@ -17,14 +17,14 @@ const LexoraAPI = {
   TIMEOUT: 8000,
   FETCH_TIMEOUT: 6000,
   TROY_OZ_GRAMS: 31.1034768,
-  METALS: ["gold", "silver", "platinum", "palladium", "rhodium", "cobalt", "lithium"],
-  METAL_LB: ["copper", "aluminum", "nickel", "zinc", "lead", "tin", "magnesium", "manganese", "chromium"],
+  METALS: ["gold", "silver", "platinum", "palladium", "rhodium"],
+  METAL_LB: ["copper", "aluminum", "nickel", "zinc", "lead"],
   /** Reject bad API values (e.g. copper $/lb mistaken as gold $/oz) */
   PRICE_RANGES: {
     // Precious Metals
-    gold: [1500, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000], rhodium: [1000, 15000], cobalt: [15, 50], lithium: [10, 80],
+    gold: [1500, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000], rhodium: [1000, 15000],
     // Industrial Metals
-    copper: [2, 15], aluminum: [1500, 3500], nickel: [10000, 35000], zinc: [2000, 5000], lead: [1500, 3500], tin: [25000, 45000], magnesium: [2000, 4000], manganese: [1500, 3500], chromium: [8000, 15000],
+    copper: [2, 15], aluminum: [1500, 3500], nickel: [10000, 35000], zinc: [2000, 5000], lead: [1500, 3500],
     // Cryptocurrencies
     bitcoin: [10000, 250000], ethereum: [500, 25000], ripple: [0.2, 5], cardano: [0.2, 5],
     solana: [10, 300], dogecoin: [0.05, 2], polkadot: [3, 60], avalanche: [10, 200], chainlink: [5, 50],
@@ -35,15 +35,14 @@ const LexoraAPI = {
     crude_oil: [35, 200], natural_gas: [1.5, 10], wheat: [400, 900], corn: [350, 800], soybeans: [900, 1800],
     // Stock Indices
     sp500: [3000, 9000], nasdaq: [10000, 35000], dow_jones: [30000, 45000], ftse_100: [6500, 8500], nikkei_225: [28000, 42000],
-    cac_40: [6000, 8500], hang_seng: [15000, 32000], shanghai_composite: [2500, 4000], nifty_50: [15000, 28000], sensex: [50000, 85000],
     // Individual Stocks
     apple: [100, 250], microsoft: [300, 500], google: [120, 200], amazon: [100, 200], tesla: [150, 400],
   },
   FALLBACK: {
     // Precious Metals
-    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, rhodium: 4500, cobalt: 28, lithium: 35,
+    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, rhodium: 4500,
     // Industrial Metals
-    copper: 4.25, aluminum: 2400, nickel: 18000, zinc: 3200, lead: 2200, tin: 32000, magnesium: 2800, manganese: 2400, chromium: 11000,
+    copper: 4.25, aluminum: 2400, nickel: 18000, zinc: 3200, lead: 2200,
     // Cryptocurrencies
     bitcoin: 97000, ethereum: 3600, ripple: 0.55, cardano: 0.45, solana: 145,
     dogecoin: 0.15, polkadot: 7.5, avalanche: 35, chainlink: 14,
@@ -53,15 +52,14 @@ const LexoraAPI = {
     crude_oil: 72, natural_gas: 2.8, wheat: 620, corn: 580, soybeans: 1150,
     // Stock Indices
     sp500: 5900, nasdaq: 19500, dow_jones: 39000, ftse_100: 7500, nikkei_225: 35000,
-    cac_40: 7200, hang_seng: 21000, shanghai_composite: 3200, nifty_50: 22000, sensex: 72000,
     // Individual Stocks
     apple: 175, microsoft: 420, google: 155, amazon: 175, tesla: 245,
   },
   LABELS: {
     // Precious Metals
-    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", rhodium: "Rhodium", cobalt: "Cobalt", lithium: "Lithium",
+    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", rhodium: "Rhodium",
     // Industrial Metals
-    copper: "Copper", aluminum: "Aluminum", nickel: "Nickel", zinc: "Zinc", lead: "Lead", tin: "Tin", magnesium: "Magnesium", manganese: "Manganese", chromium: "Chromium",
+    copper: "Copper", aluminum: "Aluminum", nickel: "Nickel", zinc: "Zinc", lead: "Lead",
     // Cryptocurrencies
     bitcoin: "Bitcoin", ethereum: "Ethereum", ripple: "Ripple", cardano: "Cardano",
     solana: "Solana", dogecoin: "Dogecoin", polkadot: "Polkadot", avalanche: "Avalanche", chainlink: "Chainlink",
@@ -72,7 +70,6 @@ const LexoraAPI = {
     crude_oil: "Crude Oil", natural_gas: "Natural Gas", wheat: "Wheat", corn: "Corn", soybeans: "Soybeans",
     // Stock Indices
     sp500: "S&P 500", nasdaq: "NASDAQ", dow_jones: "Dow Jones", ftse_100: "FTSE 100", nikkei_225: "Nikkei 225",
-    cac_40: "CAC 40", hang_seng: "Hang Seng", shanghai_composite: "Shanghai Composite", nifty_50: "Nifty 50", sensex: "BSE Sensex",
     // Individual Stocks
     apple: "Apple", microsoft: "Microsoft", google: "Google", amazon: "Amazon", tesla: "Tesla",
   },
@@ -91,7 +88,6 @@ const LexoraAPI = {
     crude_oil: "CL=F", natural_gas: "NG=F", wheat: null, corn: null, soybeans: null,
     // Stock Indices
     sp500: "^GSPC", nasdaq: "^IXIC", dow_jones: "^DJI", ftse_100: "^FTSE", nikkei_225: "^N225",
-    cac_40: "^FCHI", hang_seng: "^HSI", shanghai_composite: "^SSEC", nifty_50: "^NSEI", sensex: "^BSESN",
     // Individual Stocks
     apple: "AAPL", microsoft: "MSFT", google: "GOOGL", amazon: "AMZN", tesla: "TSLA",
   },
@@ -101,17 +97,9 @@ const LexoraAPI = {
     platinum: ["XPTUSD=X", "PL=F"],
     palladium: ["XPDUSD=X", "PA=F"],
     rhodium: ["XAU=X"],
-    cobalt: ["COBALT"],
-    lithium: ["LITHIUM"],
     copper: ["HG=F"],
     aluminum: ["ALI=F"],
     nickel: ["LME:NSI"],
-    zinc: ["ZINC"],
-    lead: ["LEAD"],
-    tin: ["TIN"],
-    magnesium: ["MAGNESIUM"],
-    manganese: ["MANGANESE"],
-    chromium: ["CHROMIUM"],
     natural_gas: ["NG=F"],
     wheat: ["ZW=F"],
     corn: ["ZC=F"],
@@ -185,10 +173,17 @@ const LexoraAPI = {
     try {
       const headers = { Accept: "application/json" };
       
+      // Add JWT token if available
+      const token = localStorage.getItem('lexora_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const r = await fetch(url, {
         signal: ctrl.signal,
         cache: "no-store",
         headers: headers,
+        credentials: 'include'
       });
       if (!r.ok) throw new Error(String(r.status));
       const text = await r.text();

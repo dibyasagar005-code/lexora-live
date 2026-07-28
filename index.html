@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LexorA — Luxury Exchange Of Real-time Assets</title>
+  <link rel="stylesheet" href="./static/style.css?v=10">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body data-user-logged-in="false">
+  <div class="news-ticker">
+    <span class="ticker-label">LIVE</span>
+    <div class="ticker-content" id="tickerContent">Loading…</div>
+  </div>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar">
+      <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
+      <div class="sidebar-brand">
+        <div class="logo-icon" aria-hidden="true">◈</div>
+        <div class="brand-text">
+          <h1>LexorA</h1>
+          <span class="tagline">Luxury Exchange Of Real-time Assets</span>
+        </div>
+      </div>
+      <div class="live-status">
+        <span class="status-dot"></span>
+        <span>Market Live</span>
+        <small id="lastUpdate">--</small>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-link active" data-page="home"><span class="nav-icon">⌂</span> Home</a>
+        <a href="#" class="nav-link" data-page="markets"><span class="nav-icon">◉</span> Live Markets</a>
+        <a href="#" class="nav-link" data-page="prediction"><span class="nav-icon">◎</span> AI Prediction</a>
+        <a href="#" class="nav-link" data-page="calculator"><span class="nav-icon">⊕</span> Calculator</a>
+        <div class="nav-divider"></div>
+        <div id="auth-nav-links">
+          <a href="/login" class="nav-link"><span class="nav-icon">🔐</span> Login</a>
+          <a href="/register" class="nav-link"><span class="nav-icon">📝</span> Register</a>
+        </div>
+        <div id="user-nav-links" style="display: none;">
+          <a href="/dashboard" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
+          <a href="/watchlist" class="nav-link"><span class="nav-icon">⭐</span> Watchlist</a>
+          <a href="/history" class="nav-link"><span class="nav-icon">📈</span> History</a>
+          <a href="/settings" class="nav-link"><span class="nav-icon">⚙️</span> Settings</a>
+          <a href="/auth/logout" class="nav-link"><span class="nav-icon">🚪</span> Logout</a>
+        </div>
+      </nav>
+      <div class="currency-switch glass">
+        <label for="currencySelect">Display currency</label>
+        <select id="currencySelect" aria-label="Currency">
+          <option value="INR">INR — ₹ Indian Rupee</option>
+          <option value="USD">USD — $ US Dollar</option>
+          <option value="EUR">EUR — € Euro</option>
+          <option value="GBP">GBP — £ British Pound</option>
+          <option value="JPY">JPY — ¥ Japanese Yen</option>
+          <option value="AUD">AUD — A$ Australian Dollar</option>
+          <option value="CAD">CAD — C$ Canadian Dollar</option>
+        </select>
+      </div>
+      <div class="sidebar-footer">
+        <p class="setting-info">Data: <strong id="dataSource">LIVE · 30s</strong></p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <button type="button" class="mobile-menu-btn" id="menuBtn" aria-label="Open menu">☰ Menu</button>
+
+      <!-- HOME -->
+      <div class="page-view" data-page="home">
+        <section class="page-header">
+          <h2>AI Investment Intelligence</h2>
+          <p>30s refresh · IBJA India · Minted Metal · Binance · Live FX</p>
+          <span class="refresh-badge" id="refreshBadge">Connecting APIs…</span>
+        </section>
+        <div class="hero-grid">
+          <div class="hero-card glass">
+            <h3>Market Pulse</h3>
+            <div class="pulse-indicator"><span class="pulse-ring"></span><span class="pulse-text">Loading</span></div>
+            <p class="hero-stat" id="assetCount">0 assets</p>
+          </div>
+          <div class="hero-card glass accent">
+            <h3>Live APIs</h3>
+            <p>IBJA India (PhonePe-style) · Binance · Minted Metal</p>
+            <button type="button" class="btn btn-primary btn-sm" onclick="LexoraApp.refreshMarketData(true)">Refresh Now</button>
+          </div>
+          <div class="hero-card glass">
+            <h3>Instant Update</h3>
+            <p>Live spot prices every 30 seconds</p>
+          </div>
+        </div>
+        <section class="section">
+          <h3 class="section-title">Live Market Overview</h3>
+          <div class="market-grid" id="homeMarketGrid"></div>
+        </section>
+        <section class="section">
+          <h3 class="section-title">Quick AI Signals</h3>
+          <div class="signals-grid" id="quickSignals"><p class="loading-spinner">Loading…</p></div>
+        </section>
+        <section class="section">
+          <div class="chart-row">
+            <div class="chart-card glass"><h4>Live Market Move %</h4><div class="chart-canvas-wrap"><canvas id="comparisonChart"></canvas></div></div>
+            <div class="chart-card glass"><h4>Volatility Index</h4><div class="chart-canvas-wrap"><canvas id="volatilityChart"></canvas></div></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- MARKETS -->
+      <div class="page-view" data-page="markets">
+        <section class="page-header">
+          <h2>Live Markets</h2>
+          <p>Real-time spot · refreshes every 10s</p>
+        </section>
+        <div class="market-tabs">
+          <button class="tab active" data-filter="all">All</button>
+          <button class="tab" data-filter="metals">Metals</button>
+          <button class="tab" data-filter="crypto">Crypto</button>
+          <button class="tab" data-filter="forex">Forex</button>
+          <button class="tab" data-filter="commodities">Commodities</button>
+          <button class="tab" data-filter="indices">Indices</button>
+          <button class="tab" data-filter="stocks">Stocks</button>
+        </div>
+        <div class="markets-table-wrap glass">
+          <table class="markets-table">
+            <thead><tr><th>Asset</th><th>Live Price</th><th>Move</th><th>Signal</th><th></th></tr></thead>
+            <tbody id="marketsBody"></tbody>
+          </table>
+        </div>
+        <div class="chart-row mt-4">
+          <div class="chart-card glass full-width"><h4>Live Price Stream (30-day trend)</h4><div class="chart-canvas-wrap chart-canvas-tall"><canvas id="livePriceChart"></canvas></div></div>
+        </div>
+      </div>
+
+      <!-- PREDICTION -->
+      <div class="page-view" data-page="prediction">
+        <section class="page-header">
+          <h2>AI Prediction Engine</h2>
+          <div class="symbol-selector">
+            <a href="#" class="symbol-chip active" data-sym="gold">Gold</a>
+            <a href="#" class="symbol-chip" data-sym="silver">Silver</a>
+            <a href="#" class="symbol-chip" data-sym="platinum">Platinum</a>
+            <a href="#" class="symbol-chip" data-sym="palladium">Palladium</a>
+            <a href="#" class="symbol-chip" data-sym="rhodium">Rhodium</a>
+            <a href="#" class="symbol-chip" data-sym="copper">Copper</a>
+            <a href="#" class="symbol-chip" data-sym="aluminum">Aluminum</a>
+            <a href="#" class="symbol-chip" data-sym="nickel">Nickel</a>
+            <a href="#" class="symbol-chip" data-sym="bitcoin">Bitcoin</a>
+            <a href="#" class="symbol-chip" data-sym="ethereum">Ethereum</a>
+            <a href="#" class="symbol-chip" data-sym="ripple">Ripple</a>
+            <a href="#" class="symbol-chip" data-sym="solana">Solana</a>
+            <a href="#" class="symbol-chip" data-sym="cardano">Cardano</a>
+            <a href="#" class="symbol-chip" data-sym="dogecoin">Dogecoin</a>
+            <a href="#" class="symbol-chip" data-sym="polkadot">Polkadot</a>
+            <a href="#" class="symbol-chip" data-sym="avalanche">Avalanche</a>
+            <a href="#" class="symbol-chip" data-sym="chainlink">Chainlink</a>
+            <a href="#" class="symbol-chip" data-sym="usd_inr">USD/INR</a>
+            <a href="#" class="symbol-chip" data-sym="eur_usd">EUR/USD</a>
+            <a href="#" class="symbol-chip" data-sym="gbp_usd">GBP/USD</a>
+            <a href="#" class="symbol-chip" data-sym="usd_jpy">USD/JPY</a>
+            <a href="#" class="symbol-chip" data-sym="aud_usd">AUD/USD</a>
+            <a href="#" class="symbol-chip" data-sym="crude_oil">Crude Oil</a>
+            <a href="#" class="symbol-chip" data-sym="natural_gas">Natural Gas</a>
+            <a href="#" class="symbol-chip" data-sym="wheat">Wheat</a>
+            <a href="#" class="symbol-chip" data-sym="corn">Corn</a>
+            <a href="#" class="symbol-chip" data-sym="sp500">S&P 500</a>
+            <a href="#" class="symbol-chip" data-sym="nasdaq">NASDAQ</a>
+            <a href="#" class="symbol-chip" data-sym="dow_jones">Dow Jones</a>
+            <a href="#" class="symbol-chip" data-sym="ftse_100">FTSE 100</a>
+            <a href="#" class="symbol-chip" data-sym="nikkei_225">Nikkei 225</a>
+            <a href="#" class="symbol-chip" data-sym="apple">Apple</a>
+            <a href="#" class="symbol-chip" data-sym="microsoft">Microsoft</a>
+            <a href="#" class="symbol-chip" data-sym="google">Google</a>
+            <a href="#" class="symbol-chip" data-sym="amazon">Amazon</a>
+            <a href="#" class="symbol-chip" data-sym="tesla">Tesla</a>
+          </div>
+        </section>
+        <div id="predictionPanel"><p class="loading-spinner">Select asset…</p></div>
+      </div>
+
+      <!-- CALCULATOR -->
+      <div class="page-view" data-page="calculator">
+        <section class="page-header">
+          <h2>Investment Calculators</h2>
+          <p>SIP · Gold · Silver · Crypto · EMI · Compound — 7 live currencies</p>
+        </section>
+        <div class="calc-toolbar glass">
+          <div class="currency-switch">
+            <label for="calcCurrencySelect">Calculator currency</label>
+            <select id="calcCurrencySelect" aria-label="Calculator currency">
+              <option value="INR">INR — ₹ Indian Rupee</option>
+              <option value="USD">USD — $ US Dollar</option>
+              <option value="EUR">EUR — € Euro</option>
+              <option value="GBP">GBP — £ British Pound</option>
+              <option value="JPY">JPY — ¥ Japanese Yen</option>
+              <option value="AUD">AUD — A$ Australian Dollar</option>
+              <option value="CAD">CAD — C$ Canadian Dollar</option>
+            </select>
+            <div class="fx-rate-badge" id="fxRateBadge">Loading live FX…</div>
+          </div>
+          <button type="button" class="btn btn-outline" id="btnCalcReset">Reset all</button>
+        </div>
+        <div class="calc-tabs">
+          <button type="button" class="tab active" data-calc="sip">SIP</button>
+          <button type="button" class="tab" data-calc="gold">Gold</button>
+          <button type="button" class="tab" data-calc="silver">Silver</button>
+          <button type="button" class="tab" data-calc="crypto">Crypto Profit</button>
+          <button type="button" class="tab" data-calc="emi">EMI</button>
+          <button type="button" class="tab" data-calc="compound">Compound</button>
+        </div>
+        <div class="calc-panels">
+          <div class="calc-panel glass active" id="calc-sip">
+            <h4>SIP Calculator</h4>
+            <form class="calc-form" data-type="sip">
+              <div class="form-group"><label class="lbl-money">Monthly Investment</label><input type="number" name="monthly" value="5000" step="100"></div>
+              <div class="form-group"><label>Expected Return (% p.a.)</label><input type="number" name="rate" value="12" step="0.1"></div>
+              <div class="form-group"><label>Duration (years)</label><input type="number" name="years" value="10" min="1"></div>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-sip"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
+          </div>
+          <div class="calc-panel glass" id="calc-gold">
+            <h4>Gold Investment Calculator</h4>
+            <form class="calc-form" data-type="gold">
+              <div class="form-group"><label>Gold (grams)</label><input type="number" name="grams" value="10" step="0.1"></div>
+              <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="6500" step="0.01"></div>
+              <div class="form-group form-group-wide">
+                <span class="live-price-badge" data-live-badge="gold">Live price loading…</span>
+                <button type="button" class="btn btn-outline btn-sm" data-live-price="gold" data-live-field="price">Use live gold price</button>
+              </div>
+              <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
+              <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="8" step="0.1"></div>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-gold"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
+          </div>
+          <div class="calc-panel glass" id="calc-silver">
+            <h4>Silver Investment Calculator</h4>
+            <form class="calc-form" data-type="silver">
+              <div class="form-group"><label>Silver (grams)</label><input type="number" name="grams" value="100" step="1"></div>
+              <div class="form-group"><label class="lbl-money">Price per gram</label><input type="number" name="price" value="85" step="0.01"></div>
+              <div class="form-group form-group-wide">
+                <span class="live-price-badge" data-live-badge="silver">Live price loading…</span>
+                <button type="button" class="btn btn-outline btn-sm" data-live-price="silver" data-live-field="price">Use live silver price</button>
+              </div>
+              <div class="form-group"><label>Hold (years)</label><input type="number" name="years" value="5" min="1"></div>
+              <div class="form-group"><label>Annual appreciation (%)</label><input type="number" name="appreciation" value="6" step="0.1"></div>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-silver"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
+          </div>
+          <div class="calc-panel glass" id="calc-crypto">
+            <h4>Crypto Profit Calculator</h4>
+            <form class="calc-form" data-type="crypto">
+              <div class="form-group"><label class="lbl-money">Buy Price</label><input type="number" name="buy_price" value="50000"></div>
+              <div class="form-group form-group-wide">
+                <span class="live-price-badge" data-live-badge="bitcoin">Live BTC loading…</span>
+                <button type="button" class="btn btn-outline btn-sm" data-live-price="bitcoin" data-live-field="buy_price">Use live BTC price</button>
+              </div>
+              <div class="form-group"><label class="lbl-money">Sell Price</label><input type="number" name="sell_price" value="65000"></div>
+              <div class="form-group"><label>Quantity</label><input type="number" name="quantity" value="1" step="0.0001"></div>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-crypto"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
+          </div>
+          <div class="calc-panel glass" id="calc-emi">
+            <h4>EMI Calculator</h4>
+            <form class="calc-form" data-type="emi">
+              <div class="form-group"><label class="lbl-money">Loan Amount</label><input type="number" name="principal" value="1000000"></div>
+              <div class="form-group"><label>Interest Rate (% p.a.)</label><input type="number" name="rate" value="8.5" step="0.1"></div>
+              <div class="form-group"><label>Tenure (months)</label><input type="number" name="tenure" value="240" min="1"></div>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-emi"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
+          </div>
+          <div class="calc-panel glass" id="calc-compound">
+            <h4>Compound Interest Calculator</h4>
+            <form class="calc-form" data-type="compound">
+              <div class="form-group"><label class="lbl-money">Principal</label><input type="number" name="principal" value="100000"></div>
+              <div class="form-group"><label>Rate (% p.a.)</label><input type="number" name="rate" value="10" step="0.1"></div>
+              <div class="form-group"><label>Years</label><input type="number" name="years" value="10" min="1"></div>
+              <div class="form-group"><label>Compounding per year</label><input type="number" name="frequency" value="4" min="1"></div>
+              <button type="submit" class="btn btn-primary btn-calc-submit">Calculate</button>
+            </form>
+            <div class="calc-result" id="result-compound"><p class="calc-hint">Enter amounts in your selected currency, then tap Calculate.</p></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <a class="creator-credit" href="https://www.instagram.com/dibyasagar1297" target="_blank" rel="noopener">Made by @dibyasagar1297</a>
+  
+  <!-- Asset Analysis Modal -->
+  <div class="modal-backdrop" id="analysisModal" aria-hidden="true">
+    <div class="modal-content glass">
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+      <div id="modalBody">
+        <p class="loading-spinner">Loading analysis…</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Backend API configuration - Update this URL when backend is deployed
+    window.API_BASE_URL = 'https://lexora-live.onrender.com';
+    
+    // Capture JWT token from OAuth redirect URL
+    document.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+      
+      if (token) {
+        // Store token in localStorage
+        localStorage.setItem('lexora_token', token);
+        
+        // Clean URL by removing token parameter
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      
+      // Check authentication status and update navigation
+      const authNavLinks = document.getElementById('auth-nav-links');
+      const userNavLinks = document.getElementById('user-nav-links');
+      
+      // Check if user is logged in via data attribute
+      const isLoggedIn = document.body.getAttribute('data-user-logged-in') === 'true';
+      
+      if (isLoggedIn) {
+        authNavLinks.style.display = 'none';
+        userNavLinks.style.display = 'block';
+      } else {
+        authNavLinks.style.display = 'block';
+        userNavLinks.style.display = 'none';
+      }
+    });
+  </script>
+  
+  <script src="./static/api.js?v=10"></script>
+  <script src="./static/charts.js?v=10"></script>
+  <script src="./static/app.js?v=10"></script>
+</body>
+</html>

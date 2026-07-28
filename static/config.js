@@ -1,13 +1,8 @@
-/**
- * LexorA Configuration
- * Centralized configuration for API URLs and app settings
- */
+// Backend API URL
+const BACKEND_URL = 'https://lexora-live.onrender.com';
 
-// Backend API URL - Use relative path for same-origin
-const BACKEND_URL = '';  // Empty string for same-origin requests
-
-// Frontend URL (for OAuth redirects) - Use same origin
-const FRONTEND_URL = window.location.origin;
+// Frontend URL (for OAuth redirects)
+const FRONTEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
 
 // App configuration
 const CONFIG = {
@@ -25,3 +20,12 @@ if (typeof module !== 'undefined' && module.exports) {
 
 // Make available globally
 window.LEXORA_CONFIG = CONFIG;
+
+// JWT token helpers
+function getAuthToken() {
+  return localStorage.getItem('lexora_token');
+}
+
+function removeAuthToken() {
+  localStorage.removeItem('lexora_token');
+}

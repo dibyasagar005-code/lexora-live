@@ -147,7 +147,6 @@ const LexoraApp = {
       this.updateMarketCards(this.market);
       this.updateLastRefresh();
       this.tickRefreshLabel();
-      
       const src = document.getElementById("dataSource");
       const liveN =
         this.market.liveCount ??
@@ -162,11 +161,7 @@ const LexoraApp = {
               ? `● LIVE (${liveN}/${total})`
               : `● ESTIMATE (${total} assets)`;
       }
-      
-      if (this.currentPage === "markets") {
-        this.renderMarketsTable();
-        if (this.market) LexoraCharts.initLivePriceChart("livePriceChart", this.market);
-      }
+      if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       if (this.currentPage === "prediction") this.loadPrediction(this.activePrediction);
       LexoraCharts.refreshAll(this.market);
@@ -174,19 +169,20 @@ const LexoraApp = {
         this.loadQuickSignals();
         this.loadMarketSignals();
       }, 0);
-    } catch (error) {
-      console.error("[LexorA] Market refresh error:", error);
-      const pulse = document.querySelector(".pulse-text");
-      if (pulse) pulse.textContent = "Using cached data";
+    } catch (e) {
+      if (pulse) pulse.textContent = "Retry in 8s…";
+      console.error(e);
       if (!this.market?.assets) {
         this.market = LexoraAPI.finalizeMarket({});
+        this.updateMarketCards(this.market);
+        this.updateLastRefresh();
       }
     } finally {
-      this._marketRefreshInFlight = false;
       if (grid) grid.classList.remove("market-loading");
+      this._marketRefreshInFlight = false;
       if (this._pendingForceRefresh) {
         this._pendingForceRefresh = false;
-        setTimeout(() => this.refreshMarketData(true), 100);
+        this.refreshMarketData(true);
       }
     }
   },

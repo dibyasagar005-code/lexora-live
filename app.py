@@ -14,6 +14,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     session, jsonify, flash,
 )
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from dotenv import load_dotenv
@@ -21,6 +22,7 @@ import pyotp
 import qrcode
 import io
 import base64
+import jwt
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,7 +50,17 @@ app.secret_key = os.environ.get("SECRET_KEY", "lexora-ai-market-predictor-2024-s
 app.config["SESSION_PERMANENT"] = True
 app.config["SESSION_COOKIE_SECURE"] = True  # Required for HTTPS
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Lax for same-origin
+app.config["SESSION_COOKIE_SAMESITE"] = "None"  # None for cross-origin
+
+# Enable CORS for cross-origin requests from GitHub Pages
+CORS(app, resources={
+    r"/*": {
+        "origins": ["https://dibyasagar005-code.github.io", "https://lexora-live.onrender.com"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 # Note: CSRF protection disabled for API compatibility
 # CSRF will be handled by CORS and session-based authentication
@@ -148,6 +160,29 @@ def clear_login_attempts(identifier):
         del _login_attempts[identifier]
 
 
+def generate_jwt_token(user_id, email):
+    """Generate JWT token for cross-origin authentication."""
+    secret = app.secret_key
+    payload = {
+        'user_id': user_id,
+        'email': email,
+        'exp': datetime.utcnow() + timedelta(days=30)
+    }
+    return jwt.encode(payload, secret, algorithm='HS256')
+
+
+def verify_jwt_token(token):
+    """Verify JWT token and return user_id if valid."""
+    try:
+        secret = app.secret_key
+        payload = jwt.decode(token, secret, algorithms=['HS256'])
+        return payload.get('user_id')
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+
 def get_cached_market():
     """Return cached market data or fetch fresh."""
     with _cache_lock:
@@ -208,8 +243,12 @@ def auth_login():
             login_count = get_user_login_count(user['id'])
             if login_count > 1:
                 create_notification(user['id'], f"Welcome back! This is your #{login_count} login to LexorA.")
+            
+            # Generate JWT token for cross-origin authentication
+            token = generate_jwt_token(user['id'], email)
+            return jsonify({"success": True, "token": token, "redirect": "https://dibyasagar005-code.github.io/lexora-live/index.html"})
         
-        return jsonify({"success": True, "redirect": "/"})
+        return jsonify({"success": True, "redirect": "https://dibyasagar005-code.github.io/lexora-live/index.html"})
     else:
         record_login_attempt(email)
         return jsonify(result)
@@ -265,13 +304,25 @@ def auth_register():
     
     result = auth_manager.register_user(username, email, password)
     if result["success"]:
-        return jsonify({"success": True, "message": "Registration successful! You can now login.", "redirect": "/login"})
+        return jsonify({"success": True, "message": "Registration successful! You can now login.", "redirect": "https://dibyasagar005-code.github.io/lexora-live/login.html"})
     return jsonify(result)
 
 
 @app.route("/api/auth/status")
 def api_auth_status():
-    """Check authentication status."""
+    """Check authentication status with JWT token support."""
+    # Check Authorization header for JWT token
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        user_id = verify_jwt_token(token)
+        if user_id:
+            return jsonify({
+                "logged_in": True,
+                "user_id": user_id
+            })
+    
+    # Fallback to session-based auth
     return jsonify({
         "logged_in": auth_manager.is_logged_in(),
         "user_id": session.get("user_id")
@@ -325,7 +376,7 @@ def google_login():
     """Google OAuth login redirect."""
     if not google_oauth:
         flash("Google OAuth is not configured. Please contact administrator.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     auth_url = google_oauth.get_authorization_url()
     return redirect(auth_url)
@@ -336,12 +387,12 @@ def google_callback():
     """Google OAuth callback."""
     if not google_oauth:
         flash("Google OAuth is not configured.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     code = request.args.get("code")
     if not code:
         flash("Authorization failed. Please try again.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     try:
         # Exchange code for token
@@ -349,7 +400,7 @@ def google_callback():
         
         if "error" in token_response:
             flash(f"OAuth error: {token_response.get('error_description', token_response['error'])}", "error")
-            return redirect("/login")
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
         
         access_token = token_response.get("access_token")
         
@@ -362,21 +413,26 @@ def google_callback():
         
         if not google_id or not email:
             flash("Failed to get user information from Google.", "error")
-            return redirect("/login")
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
         
         # Authenticate or register user
         result = auth_manager.authenticate_google(google_id, email, name)
         
         if result["success"]:
-            flash(f"Welcome back, {name}!", "success")
-            return redirect("/")
+            # Generate JWT token for cross-origin authentication
+            from models.database import get_user_by_email
+            user = get_user_by_email(email)
+            if user:
+                token = generate_jwt_token(user['id'], email)
+                return redirect(f"https://dibyasagar005-code.github.io/lexora-live/index.html?token={token}")
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/index.html")
         else:
             flash(result.get("error", "Authentication failed"), "error")
-            return redirect("/login")
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
             
     except Exception as e:
         flash(f"Authentication error: {str(e)}", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
 
 
 @app.route("/auth/github")
@@ -384,7 +440,7 @@ def github_login():
     """Initiate GitHub OAuth login."""
     if not github_oauth:
         flash("GitHub OAuth is not configured.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     auth_url = github_oauth.get_auth_url()
     return redirect(auth_url)
@@ -395,7 +451,7 @@ def github_callback():
     """GitHub OAuth callback handler."""
     if not github_oauth:
         flash("GitHub OAuth is not configured.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     code = request.args.get("code")
     state = request.args.get("state")
@@ -403,18 +459,18 @@ def github_callback():
     
     if error:
         flash(f"GitHub OAuth error: {error}", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     if not code:
         flash("Authorization failed. Please try again.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     try:
         # Exchange code for token
         access_token = github_oauth.get_access_token(code)
         if not access_token:
             flash("Failed to exchange authorization code for token.", "error")
-            return redirect("/login")
+            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
         
         # Get user info
         user_info = github_oauth.get_user_info(access_token)
@@ -443,8 +499,9 @@ def github_callback():
                 ))
                 conn.commit()
                 
-                flash(f"Welcome back, {user['username']}!", "success")
-                return redirect("/")
+                # Generate JWT token for cross-origin authentication
+                token = generate_jwt_token(user["id"], email)
+                return redirect(f"https://dibyasagar005-code.github.io/lexora-live/index.html?token={token}")
             else:
                 # New user - create account
                 username = user_info["username"] or user_info["email"].split("@")[0]
@@ -459,7 +516,7 @@ def github_callback():
                 cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
                 if cursor.fetchone():
                     flash("Email already registered. Please login with your existing account.", "error")
-                    return redirect("/login")
+                    return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
                 
                 # Create user
                 cursor.execute("""
@@ -485,12 +542,13 @@ def github_callback():
                 ))
                 conn.commit()
                 
-                flash(f"Welcome to LexorA, {username}!", "success")
-                return redirect("/")
+                # Generate JWT token for cross-origin authentication
+                token = generate_jwt_token(user_id, email)
+                return redirect(f"https://dibyasagar005-code.github.io/lexora-live/index.html?token={token}")
     
     except Exception as e:
         flash(f"GitHub OAuth error: {str(e)}", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
 
 
 @app.route("/auth/send-otp", methods=["POST", "OPTIONS"])
