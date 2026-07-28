@@ -7,3 +7,14 @@ relative_links:
 include:
   - index.html
   - static/
+exclude:
+  - README.md
+  - requirements.txt
+  - app.py
+  - api/
+  - ai/
+  - auth/
+  - data/
+  - models/
+  - templates/
+  - .github/
