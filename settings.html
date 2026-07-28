@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}Settings - LexorA{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>Settings</h2>
+    <p>Configure your LexorA experience</p>
+</section>
+
+<div class="settings-grid">
+    <div class="settings-card glass">
+        <h4>Display</h4>
+        <div class="setting-row">
+            <label>Theme</label>
+            <select id="themeSelect">
+                <option value="cyber" selected>Cyber Dark</option>
+                <option value="gold">Gold Accent</option>
+            </select>
+        </div>
+        <div class="setting-row">
+            <label>Auto-refresh interval</label>
+            <select id="refreshInterval">
+                <option value="30" selected>30 seconds</option>
+                <option value="60">60 seconds</option>
+                <option value="120">2 minutes</option>
+            </select>
+        </div>
+    </div>
+    <div class="settings-card glass">
+        <h4>Notifications</h4>
+        <div class="setting-row">
+            <label><input type="checkbox" id="notifPrice" checked> Price alerts</label>
+        </div>
+        <div class="setting-row">
+            <label><input type="checkbox" id="notifPrediction" checked> AI prediction alerts</label>
+        </div>
+    </div>
+    <div class="settings-card glass">
+        <h4>Data & API</h4>
+        <p>Data sources: metals.live, CoinGecko, Frankfurter, Yahoo Finance</p>
+        <button class="btn btn-outline" id="btnCurateSettings">Run Data Curation</button>
+        <p class="setting-info" id="curateStatus"></p>
+    </div>
+    <div class="settings-card glass">
+        <h4>Account</h4>
+        <p>Logged in as <strong>{{ user }}</strong></p>
+        <a href="static/$1" class="btn btn-outline">Logout</a>
+    </div>
+    <div class="settings-card glass">
+        <h4>Security</h4>
+        <div class="setting-row">
+            <label>Two-Factor Authentication</label>
+            <div id="2fa-status">
+                <span class="status-badge" id="2fa-badge">Loading...</span>
+            </div>
+        </div>
+        <div id="2fa-setup-section" style="display: none;">
+            <div class="setting-row">
+                <p>Scan the QR code with your authenticator app</p>
+                <div id="qr-code-container" style="text-align: center; margin: 20px 0;">
+                    <img id="qr-code" src="" alt="QR Code" style="max-width: 200px;">
+                </div>
+                <p class="setting-info">Or enter this code manually: <code id="manual-code"></code></p>
+            </div>
+            <div class="setting-row">
+                <input type="text" id="2fa-code" placeholder="Enter 6-digit code" maxlength="6" style="padding: 10px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; border-radius: 8px;">
+                <button class="btn btn-primary" id="verify-2fa-btn">Verify</button>
+            </div>
+        </div>
+        <div class="setting-row">
+            <button class="btn btn-outline" id="setup-2fa-btn">Setup 2FA</button>
+            <button class="btn btn-outline" id="disable-2fa-btn" style="display: none;">Disable 2FA</button>
+        </div>
+        <div id="2fa-message" class="setting-info" style="margin-top: 10px;"></div>
+    </div>
+    <div class="settings-card glass">
+        <h4>Login History</h4>
+        <div id="login-history-container">
+            <p>Loading login history...</p>
+        </div>
+    </div>
+    <div class="settings-card glass">
+        <h4>Active Sessions</h4>
+        <div id="sessions-container">
+            <p>Loading active sessions...</p>
+        </div>
+        <div class="setting-row" style="margin-top: 16px;">
+            <button class="btn btn-outline" id="revoke-all-sessions-btn">Revoke All Other Sessions</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.getElementById('btnCurateSettings')?.addEventListener('click', () => {
+        LexoraApp.runCuration().then(r => {
+            document.getElementById('curateStatus').textContent = `Curated ${r?.data?.curated || 0} records`;
+        });
+    });
+    document.getElementById('refreshInterval')?.addEventListener('change', e => {
+        LexoraApp.setRefreshInterval(parseInt(e.target.value) * 1000);
+    });
+
+    // 2FA functionality
+    const API_BASE_URL = window.LEXORA_CONFIG ? window.LEXORA_CONFIG.API_BASE_URL : 'https://lexora-live.onrender.com';
+
+    // Check 2FA status on page load
+    async function check2FAStatus() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/2fa/status`, {
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            const badge = document.getElementById('2fa-badge');
+            const setupBtn = document.getElementById('setup-2fa-btn');
+            const disableBtn = document.getElementById('disable-2fa-btn');
+            
+            if (data.enabled) {
+                badge.textContent = 'Enabled';
+                badge.style.background = 'rgba(0, 255, 136, 0.2)';
+                badge.style.color = '#00ff88';
+                setupBtn.style.display = 'none';
+                disableBtn.style.display = 'inline-block';
+            } else {
+                badge.textContent = 'Disabled';
+                badge.style.background = 'rgba(255, 68, 68, 0.2)';
+                badge.style.color = '#ff4444';
+                setupBtn.style.display = 'inline-block';
+                disableBtn.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Failed to check 2FA status:', error);
+        }
+    }
+
+    // Setup 2FA
+    document.getElementById('setup-2fa-btn').addEventListener('click', async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/2fa/setup`, {
+                method: 'POST',
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                document.getElementById('2fa-setup-section').style.display = 'block';
+                document.getElementById('qr-code').src = data.qr_code;
+                document.getElementById('manual-code').textContent = data.secret;
+                document.getElementById('setup-2fa-btn').style.display = 'none';
+            } else {
+                showMessage(data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Failed to setup 2FA:', error);
+            showMessage('Failed to setup 2FA', 'error');
+        }
+    });
+
+    // Verify 2FA code
+    document.getElementById('verify-2fa-btn').addEventListener('click', async () => {
+        const code = document.getElementById('2fa-code').value;
+        if (!code || code.length !== 6) {
+            showMessage('Please enter a valid 6-digit code', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/2fa/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code }),
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                showMessage('2FA enabled successfully!', 'success');
+                document.getElementById('2fa-setup-section').style.display = 'none';
+                check2FAStatus();
+            } else {
+                showMessage(data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Failed to verify 2FA:', error);
+            showMessage('Failed to verify code', 'error');
+        }
+    });
+
+    // Disable 2FA
+    document.getElementById('disable-2fa-btn').addEventListener('click', async () => {
+        const password = prompt('Enter your password to disable 2FA:');
+        if (!password) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/2fa/disable`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                showMessage('2FA disabled successfully', 'success');
+                check2FAStatus();
+            } else {
+                showMessage(data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Failed to disable 2FA:', error);
+            showMessage('Failed to disable 2FA', 'error');
+        }
+    });
+
+    // Load login history
+    async function loadLoginHistory() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/security/login-history`, {
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success && data.history.length > 0) {
+                const container = document.getElementById('login-history-container');
+                container.innerHTML = `
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <th style="text-align: left; padding: 8px; color: #00f5ff;">Method</th>
+                                <th style="text-align: left; padding: 8px; color: #00f5ff;">IP Address</th>
+                                <th style="text-align: left; padding: 8px; color: #00f5ff;">Date</th>
+                                <th style="text-align: left; padding: 8px; color: #00f5ff;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.history.map(item => `
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 8px; color: #aaaacc;">${item.login_method}</td>
+                                    <td style="padding: 8px; color: #aaaacc;">${item.ip_address || 'Unknown'}</td>
+                                    <td style="padding: 8px; color: #aaaacc;">${new Date(item.timestamp).toLocaleString()}</td>
+                                    <td style="padding: 8px;">
+                                        <span class="status-badge" style="background: ${item.success ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 68, 68, 0.2)'}; color: ${item.success ? '#00ff88' : '#ff4444'};">
+                                            ${item.success ? 'Success' : 'Failed'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                document.getElementById('login-history-container').innerHTML = '<p class="setting-info">No login history available</p>';
+            }
+        } catch (error) {
+            console.error('Failed to load login history:', error);
+            document.getElementById('login-history-container').innerHTML = '<p class="setting-info">Failed to load login history</p>';
+        }
+    }
+
+    // Load active sessions
+    async function loadActiveSessions() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/security/sessions`, {
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success && data.sessions.length > 0) {
+                const container = document.getElementById('sessions-container');
+                container.innerHTML = data.sessions.map(session => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px;">
+                        <div>
+                            <p style="margin: 0; color: #00f5ff; font-weight: 600;">${session.device_info || 'Unknown Device'}</p>
+                            <p style="margin: 4px 0 0 0; color: #8888aa; font-size: 12px;">${session.ip_address || 'Unknown IP'}</p>
+                            <p style="margin: 4px 0 0 0; color: #8888aa; font-size: 12px;">Last active: ${new Date(session.last_activity).toLocaleString()}</p>
+                        </div>
+                        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="revokeSession('${session.session_id}')">Revoke</button>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('sessions-container').innerHTML = '<p class="setting-info">No active sessions</p>';
+            }
+        } catch (error) {
+            console.error('Failed to load sessions:', error);
+            document.getElementById('sessions-container').innerHTML = '<p class="setting-info">Failed to load sessions</p>';
+        }
+    }
+
+    // Revoke specific session
+    async function revokeSession(sessionId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/security/sessions/${sessionId}`, {
+                method: 'DELETE',
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                loadActiveSessions();
+            } else {
+                alert('Failed to revoke session');
+            }
+        } catch (error) {
+            console.error('Failed to revoke session:', error);
+            alert('Failed to revoke session');
+        }
+    }
+
+    // Revoke all sessions
+    document.getElementById('revoke-all-sessions-btn').addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to revoke all other sessions? You will be logged out on all other devices.')) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/security/sessions/revoke-all`, {
+                method: 'POST',
+                credentials: 'include',
+                mode: 'cors'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('All other sessions have been revoked');
+                loadActiveSessions();
+            } else {
+                alert('Failed to revoke sessions');
+            }
+        } catch (error) {
+            console.error('Failed to revoke all sessions:', error);
+            alert('Failed to revoke sessions');
+        }
+    });
+
+    function showMessage(message, type) {
+        const messageEl = document.getElementById('2fa-message');
+        messageEl.textContent = message;
+        messageEl.style.color = type === 'success' ? '#00ff88' : '#ff4444';
+        setTimeout(() => {
+            messageEl.textContent = '';
+        }, 5000);
+    }
+
+    // Initialize
+    check2FAStatus();
+    loadLoginHistory();
+    loadActiveSessions();
+</script>
+<style>
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.1);
+    }
+</style>
+{% endblock %}

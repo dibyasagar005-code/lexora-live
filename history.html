@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}History - LexorA{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>Market History</h2>
+    <form class="symbol-form" method="GET">
+        <select name="symbol" onchange="this.form.submit()">
+            {% for s in ['gold','silver','bitcoin','ethereum','crude_oil','platinum','sp500','usd_inr'] %}
+            <option value="{{ s }}" {% if symbol == s %}selected{% endif %}>{{ s|title }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</section>
+
+<div class="history-grid">
+    <div class="panel glass">
+        <h4>Price History ({{ prices|length }} records)</h4>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Price</th><th>Change %</th><th>Time</th></tr></thead>
+                <tbody>
+                    {% for p in prices|reverse %}
+                    <tr>
+                        <td>${{ "%.2f"|format(p.price) }}</td>
+                        <td>{{ "%.2f"|format(p.change_pct) }}%</td>
+                        <td>{{ p.timestamp }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3">No price history yet</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="panel glass">
+        <h4>AI Predictions History</h4>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Signal</th><th>Confidence</th><th>Trend</th><th>Time</th></tr></thead>
+                <tbody>
+                    {% for p in predictions %}
+                    <tr>
+                        <td><span class="signal-badge signal-{{ p.signal|lower }}">{{ p.signal }}</span></td>
+                        <td>{{ p.confidence }}%</td>
+                        <td>{{ p.trend }}</td>
+                        <td>{{ p.created_at }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">No predictions stored</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="chart-card glass mt-4">
+    <h4>Curated Data Timeline — {{ symbol|title }}</h4>
+    <canvas id="curatedChart" data-symbol="{{ symbol }}"></canvas>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        LexoraCharts.initCuratedChart('curatedChart', '{{ symbol }}');
+    });
+</script>
+{% endblock %}

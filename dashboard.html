@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - LexorA{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>Welcome, {{ user }}</h2>
+    <p>Your AI-powered investment command center</p>
+</section>
+
+<div class="dashboard-grid">
+    <div class="dash-card glass">
+        <h4>Portfolio Value</h4>
+        <div class="dash-value" id="portfolioValue">$0.00</div>
+        <button class="btn btn-sm btn-outline" id="btnRefreshPortfolio">Refresh</button>
+    </div>
+    <div class="dash-card glass">
+        <h4>Watchlist</h4>
+        <div class="dash-value">{{ watchlist|length }} assets</div>
+        <a href="static/$1" class="btn btn-sm btn-outline">Manage</a>
+    </div>
+    <div class="dash-card glass">
+        <h4>Notifications</h4>
+        <div class="dash-value">{{ notifications|length }} new</div>
+    </div>
+    <div class="dash-card glass accent">
+        <h4>AI Status</h4>
+        <div class="dash-value live-text">ACTIVE</div>
+    </div>
+</div>
+
+<div class="dashboard-row">
+    <div class="panel glass">
+        <h4>Recent AI Predictions</h4>
+        <div class="pred-list">
+            {% for p in predictions %}
+            <div class="pred-item">
+                <span class="symbol">{{ p.symbol|title }}</span>
+                <span class="signal-badge signal-{{ p.signal|lower }}">{{ p.signal }}</span>
+                <span>{{ p.confidence }}%</span>
+                <small>{{ p.created_at }}</small>
+            </div>
+            {% else %}
+            <p class="empty">No predictions yet. Visit AI Prediction page.</p>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="panel glass">
+        <h4>Notifications</h4>
+        <ul class="notif-list">
+            {% for n in notifications %}
+            <li>{{ n.message }} <small>{{ n.created_at }}</small></li>
+            {% else %}
+            <li class="empty">No notifications</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="panel glass mt-4">
+    <h4>Add Portfolio Holding</h4>
+    <form id="portfolioForm" class="inline-form">
+        <input type="text" name="symbol" placeholder="Symbol (e.g. bitcoin)" required>
+        <input type="number" name="quantity" placeholder="Quantity" step="0.0001" required>
+        <input type="number" name="buy_price" placeholder="Buy Price" step="0.01" required>
+        <button type="submit" class="btn btn-primary btn-sm">Add</button>
+    </form>
+</div>
+
+<div class="chart-card glass mt-4">
+    <h4>Portfolio Performance</h4>
+    <canvas id="portfolioChart"></canvas>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        LexoraApp.loadPortfolio();
+        LexoraCharts.initPortfolioChart('portfolioChart');
+        document.getElementById('portfolioForm')?.addEventListener('submit', e => {
+            e.preventDefault();
+            LexoraApp.addPortfolio(e.target);
+        });
+        document.getElementById('btnRefreshPortfolio')?.addEventListener('click', () => LexoraApp.loadPortfolio());
+    });
+</script>
+{% endblock %}

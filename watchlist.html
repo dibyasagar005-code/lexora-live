@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Watchlist - LexorA{% endblock %}
+{% block content %}
+<section class="page-header">
+    <h2>My Watchlist</h2>
+    <p>Track your favorite assets with live updates</p>
+</section>
+
+<div class="watchlist-add glass">
+    <input type="text" id="watchSymbol" placeholder="Enter symbol (e.g. bitcoin, gold)">
+    <button class="btn btn-primary" id="btnAddWatch">Add to Watchlist</button>
+</div>
+
+<div class="watchlist-grid" id="watchlistGrid">
+    {% for item in watchlist %}
+    <div class="watch-card glass" data-symbol="{{ item.symbol }}">
+        <h4>{{ item.symbol|title }}</h4>
+        <div class="watch-price" data-price="{{ item.symbol }}">Loading...</div>
+        <button class="btn btn-sm btn-outline btn-remove" data-symbol="{{ item.symbol }}">Remove</button>
+    </div>
+    {% else %}
+    <p class="empty-state">Your watchlist is empty. Add symbols above.</p>
+    {% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => LexoraApp.initWatchlist());
+</script>
+{% endblock %}
