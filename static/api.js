@@ -137,8 +137,8 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Use static API for GitHub Pages deployment
-    return false;
+    // Use Flask backend for local development
+    return true;
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
@@ -806,13 +806,30 @@ const LexoraAPI = {
     return out;
   },
 
-  /** Main market fetch — static APIs only for GitHub Pages */
+  /** Main market fetch — try Flask backend first, fallback to static APIs */
   async fetchMarket(force = false) {
-    // Use static APIs only for GitHub Pages deployment
-    console.log("Starting fetchMarket, force:", force);
+    // Try Flask backend API first
+    try {
+      const backendUrl = window.API_BASE_URL || 'http://127.0.0.1:5000';
+      const url = force ? `${backendUrl}/api/market?fresh=1` : `${backendUrl}/api/market`;
+      const r = await this.withTimeout(
+        fetch(this.cacheBust(url), { 
+          cache: "no-store",
+          credentials: 'include'
+        }).then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.json();
+        }),
+        12000
+      );
+      if (r?.assets && Object.keys(r.assets).length) return r;
+    } catch (e) {
+      console.warn("[LexorA] Backend /api/market:", e.message);
+    }
+
+    // Fallback to static APIs
     const assets = {};
     const fast = await this.fetchMarketFastLane();
-    console.log("Fast lane data:", fast);
 
     if (fast.gold) this.putMarketAsset(assets, "gold", fast.gold, true);
     if (fast.silver) this.putMarketAsset(assets, "silver", fast.silver, true);

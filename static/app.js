@@ -138,9 +138,7 @@ const LexoraApp = {
     if (grid) grid.classList.add("market-loading");
     if (pulse) pulse.textContent = "Updating live data…";
     try {
-      console.log("Fetching market data, force:", force);
       this.market = await LexoraAPI.fetchMarket(force);
-      console.log("Market data received:", this.market);
       this.lastMarketFetch = Date.now();
       if (this.market?.assets?.usd_inr?.price) {
         this.usdInrRate = this.market.assets.usd_inr.price;
