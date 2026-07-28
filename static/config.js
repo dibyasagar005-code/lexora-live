@@ -1,8 +1,8 @@
-// Backend API URL (Render deployment)
-const BACKEND_URL = 'https://lexora-live.onrender.com';
+// Backend API URL (local Flask backend)
+const BACKEND_URL = 'http://127.0.0.1:5000';
 
 // Frontend URL (for OAuth redirects)
-const FRONTEND_URL = 'https://lexora-live.onrender.com';
+const FRONTEND_URL = 'http://127.0.0.1:5000';
 
 // App configuration
 const CONFIG = {
