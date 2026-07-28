@@ -137,7 +137,8 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    return location.hostname === "127.0.0.1" || location.hostname === "localhost";
+    // Always try backend API first since we have deployed backend
+    return true;
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
@@ -778,20 +779,23 @@ const LexoraAPI = {
 
   /** Main market fetch — fast APIs first, always returns all assets */
   async fetchMarket(force = false) {
-    if (this.isLocalFlask()) {
-      try {
-        const url = force ? "/api/market?fresh=1" : "/api/market";
-        const r = await this.withTimeout(
-          fetch(this.cacheBust(url), { cache: "no-store" }).then((res) => {
-            if (!res.ok) throw new Error(String(res.status));
-            return res.json();
-          }),
-          12000
-        );
-        if (r?.assets && Object.keys(r.assets).length) return r;
-      } catch (e) {
-        console.warn("[LexorA] Flask /api/market:", e.message);
-      }
+    // Always try backend API first since we have deployed backend
+    try {
+      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+      const url = force ? `${backendUrl}/api/market?fresh=1` : `${backendUrl}/api/market`;
+      const r = await this.withTimeout(
+        fetch(this.cacheBust(url), { 
+          cache: "no-store",
+          credentials: 'include'
+        }).then((res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.json();
+        }),
+        12000
+      );
+      if (r?.assets && Object.keys(r.assets).length) return r;
+    } catch (e) {
+      console.warn("[LexorA] Backend /api/market:", e.message);
     }
 
     const assets = {};
@@ -993,16 +997,18 @@ const LexoraAPI = {
   },
 
   async predict(symbol, market) {
-    if (this.isLocalFlask()) {
-      try {
-        const j = await this.withTimeout(
-          fetch(this.cacheBust(`/api/predict/${symbol}`)).then((r) => r.json()),
-          8000
-        );
-        if (j.success && j.data) return j.data;
-      } catch (e) {
-        /* client AI */
-      }
+    // Always try backend API first since we have deployed backend
+    try {
+      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+      const j = await this.withTimeout(
+        fetch(this.cacheBust(`${backendUrl}/api/predict/${symbol}`), {
+          credentials: 'include'
+        }).then((r) => r.json()),
+        8000
+      );
+      if (j.success && j.data) return j.data;
+    } catch (e) {
+      console.warn("[LexorA] Backend predict:", e.message);
     }
     const live = market?.assets?.[symbol];
     const livePrice =
@@ -1015,16 +1021,18 @@ const LexoraAPI = {
   },
 
   async predictAll(market) {
-    if (this.isLocalFlask()) {
-      try {
-        const j = await this.withTimeout(
-          fetch(this.cacheBust("/api/predictions/all")).then((r) => r.json()),
-          10000
-        );
-        if (j.success && j.data) return j.data;
-      } catch (e) {
-        /* */
-      }
+    // Always try backend API first since we have deployed backend
+    try {
+      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+      const j = await this.withTimeout(
+        fetch(this.cacheBust(`${backendUrl}/api/predictions/all`), {
+          credentials: 'include'
+        }).then((r) => r.json()),
+        10000
+      );
+      if (j.success && j.data) return j.data;
+    } catch (e) {
+      console.warn("[LexorA] Backend predictAll:", e.message);
     }
     const m = market || (typeof LexoraApp !== "undefined" ? LexoraApp.market : null);
     const syms = [
