@@ -46,9 +46,9 @@ from auth.auth import AuthManager, hash_password, verify_password, generate_rese
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "lexora-ai-market-predictor-2024-secret")
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_COOKIE_SECURE"] = False  # Local development
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "False") == "True"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Local development
+app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -74,19 +74,21 @@ init_db()
 # Initialize Google OAuth
 google_oauth = None
 if os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET"):
+    app_url = os.environ.get("APP_URL", "http://127.0.0.1:5000")
     google_oauth = GoogleOAuth(
         client_id=os.environ.get("GOOGLE_CLIENT_ID"),
         client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-        redirect_uri="http://127.0.0.1:5000/auth/google/callback"
+        redirect_uri=f"{app_url}/auth/google/callback"
     )
 
 # Initialize GitHub OAuth
 github_oauth = None
 if os.environ.get("GITHUB_CLIENT_ID") and os.environ.get("GITHUB_CLIENT_SECRET"):
+    app_url = os.environ.get("APP_URL", "http://127.0.0.1:5000")
     github_oauth = GitHubOAuth(
         client_id=os.environ.get("GITHUB_CLIENT_ID"),
         client_secret=os.environ.get("GITHUB_CLIENT_SECRET"),
-        redirect_uri="http://127.0.0.1:5000/auth/github/callback"
+        redirect_uri=f"{app_url}/auth/github/callback"
     )
 
 
