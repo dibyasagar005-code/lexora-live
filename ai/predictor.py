@@ -172,17 +172,28 @@ def buy_sell_recommendation(signal, confidence):
     return "HOLD", "Market consolidating - wait for clearer signal"
 
 
-def run_prediction(symbol):
+def run_prediction(symbol, current_market_price=None):
     """
     Main prediction pipeline for a given asset symbol.
     Returns full prediction dict and persists to database.
+    Uses live market price if provided, otherwise fetches historical data.
     """
     prices = get_historical_prices(symbol, days=60)
+    
+    # If historical prices are insufficient, use fallback with clear indication
     if not prices or len(prices) < 3:
         base = FALLBACK_PRICES.get(symbol, 100.0)
         prices = [base * (1 + i * 0.001) for i in range(30)]
-
-    current_price = float(prices[-1])
+    
+    # Use provided live market price if available, otherwise use last historical price
+    if current_market_price and current_market_price > 0:
+        current_price = float(current_market_price)
+        # Update the last price in historical data with live price
+        if prices:
+            prices[-1] = current_price
+    else:
+        current_price = float(prices[-1])
+    
     rsi = calculate_rsi(prices)
     volatility = calculate_volatility(prices)
     trend = detect_trend(prices)
@@ -207,6 +218,7 @@ def run_prediction(symbol):
         "recommendation": action,
         "recommendation_reason": reason,
         "risk_level": risk,
+        "data_source": "live" if current_market_price else "historical",
     }
 
     # Persist prediction
@@ -218,10 +230,18 @@ def run_prediction(symbol):
     return result
 
 
-def predict_all_assets():
-    """Run predictions for all supported assets."""
+def predict_all_assets(market_data=None):
+    """Run predictions for all supported assets using live market data if available."""
     assets = [
         "gold", "silver", "bitcoin", "ethereum", "platinum",
         "crude_oil", "sp500", "nasdaq", "usd_inr",
     ]
-    return {a: run_prediction(a) for a in assets}
+    
+    results = {}
+    for symbol in assets:
+        current_price = None
+        if market_data and market_data.get("assets", {}).get(symbol):
+            current_price = market_data["assets"][symbol].get("price")
+        results[symbol] = run_prediction(symbol, current_market_price=current_price)
+    
+    return results

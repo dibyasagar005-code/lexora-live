@@ -3,7 +3,7 @@ services:
     name: lexora-live
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
         generateValue: true
@@ -16,9 +16,9 @@ services:
       - key: SESSION_HTTPONLY
         value: "True"
       - key: SESSION_SAMESITE
-        value: "Lax"
+        value: "None"
       - key: APP_URL
-        sync: false
+        value: https://lexora-live.onrender.com
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

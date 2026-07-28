@@ -211,6 +211,7 @@ def _safe_request(url, params=None):
 
 
 def fetch_yahoo_ticker(ticker, key):
+    """Fetch from Yahoo Finance with improved error handling."""
     try:
         import yfinance as yf
 
@@ -225,7 +226,8 @@ def fetch_yahoo_ticker(ticker, key):
         change = ((price - prev) / prev) * 100 if prev else 0
         unit = "oz" if key in ("gold", "silver", "platinum", "palladium") else "lb" if key == "copper" else "unit"
         return {"price": round(price, 4), "change": round(change, 2), "symbol": key.upper(), "unit": unit}
-    except Exception:
+    except Exception as e:
+        print(f"[API] Yahoo ticker {ticker} error: {e}")
         return None
 
 
@@ -488,7 +490,7 @@ def fetch_frankfurter():
 
 
 def fetch_crypto_coingecko_extended():
-    """Fetch extended cryptocurrency data from CoinGecko."""
+    """Fetch extended cryptocurrency data from CoinGecko with rate limiting handling."""
     data = {}
     crypto_ids = {
         "bitcoin": "bitcoin",
@@ -550,16 +552,8 @@ def fetch_yahoo_stocks():
 def fetch_commodities_api():
     """Fetch commodities from alternative API sources."""
     data = {}
-    try:
-        # Try to fetch crude oil and natural gas from alternative sources
-        result = _safe_request("https://api.eia.gov/v2/petroleum/pri/gnd.data?api_key=YOUR_API_KEY&frequency=daily&data[0]=value&facets[series][0]=PET.RWTC.D")
-        if result:
-            # Parse EIA data if available
-            pass
-    except Exception:
-        pass
-    
-    # Fallback to Yahoo for commodities
+    # Skip EIA API - requires API key and is not configured
+    # Use Yahoo Finance directly for commodities
     commodities = ["crude_oil", "natural_gas", "wheat", "corn", "soybeans"]
     for key in commodities:
         row = fetch_yahoo_asset(key)
@@ -655,10 +649,17 @@ def fetch_market_data():
         "refreshSec": 30,
     }
 
-    # Fetch existing assets
-    market["assets"].update(fetch_yahoo_assets())
+    # Prioritize working APIs first
+    # 1. Fetch metals from IBJA India and Minted Metal (most reliable)
+    market["assets"].update(fetch_ibja_india())
+    for key, row in fetch_minted_metal().items():
+        if key not in market["assets"] or not market["assets"][key].get("live"):
+            market["assets"][key] = row
+        elif key in ("gold", "silver") and row.get("change"):
+            market["assets"][key]["change"] = row["change"]
+            market["assets"][key]["price"] = row.get("price") or market["assets"][key]["price"]
     
-    # Fetch extended crypto from Binance (prioritize over CoinGecko)
+    # 2. Fetch crypto from Binance (most reliable for crypto)
     for coin, info in fetch_crypto_binance().items():
         if _valid_price(coin, info["price"]):
             market["assets"][coin] = {
@@ -670,7 +671,21 @@ def fetch_market_data():
                 "apiSource": info.get("apiSource", "binance"),
             }
     
-    # Fetch CoinGecko as backup for crypto
+    # 3. Fetch forex from Frankfurter (reliable)
+    market["assets"].update(fetch_forex_extended())
+
+    # 4. Try Yahoo Finance as backup for remaining assets (with error handling)
+    # Only try for critical assets that don't have alternatives
+    yahoo_priority = ["gold", "silver", "platinum", "palladium", "copper", "crude_oil", "natural_gas"]
+    for key in yahoo_priority:
+        if key not in market["assets"] or not market["assets"][key].get("live"):
+            row = fetch_yahoo_asset(key)
+            if row:
+                row["live"] = True
+                row["apiSource"] = "yahoo"
+                market["assets"][key] = row
+
+    # 5. Try CoinGecko as backup for crypto (rate limited)
     for coin, info in fetch_crypto_coingecko_extended().items():
         if coin not in market["assets"] or not market["assets"][coin].get("live"):
             if _valid_price(coin, info["price"]):
@@ -682,22 +697,19 @@ def fetch_market_data():
                     "live": True,
                     "apiSource": info.get("apiSource", "coingecko"),
                 }
-    
-    # Fetch extended forex
-    market["assets"].update(fetch_forex_extended())
 
-    # Fetch stocks separately with rate limit handling
+    # 6. Fetch stocks with Yahoo (may fail, handle gracefully)
     for stock, info in fetch_yahoo_stocks().items():
         if _valid_price(stock, info["price"]):
             market["assets"][stock] = info
 
-    # Fetch commodities from multiple sources
+    # 7. Fetch commodities (may fail, handle gracefully)
     commodities_data = fetch_commodities_api()
     for key, info in commodities_data.items():
         if _valid_price(key, info["price"]):
             market["assets"][key] = info
 
-    # Fetch industrial metals from Yahoo
+    # 8. Fetch industrial metals (may fail, handle gracefully)
     industrial_metals = ["copper", "aluminum", "nickel", "zinc", "lead"]
     for key in industrial_metals:
         if key not in market["assets"] or not market["assets"][key].get("live"):
@@ -707,7 +719,7 @@ def fetch_market_data():
                 row["apiSource"] = "yahoo"
                 market["assets"][key] = row
 
-    # Fetch stock indices
+    # 9. Fetch stock indices (may fail, handle gracefully)
     indices = ["sp500", "nasdaq", "dow_jones", "ftse_100", "nikkei_225"]
     for key in indices:
         if key not in market["assets"] or not market["assets"][key].get("live"):
@@ -717,7 +729,7 @@ def fetch_market_data():
                 row["apiSource"] = "yahoo"
                 market["assets"][key] = row
 
-    # Fill missing assets with fallback
+    # Fill missing assets with fallback only if absolutely necessary
     live_count = sum(1 for a in market["assets"].values() if a.get("live"))
     for symbol, price in FALLBACK_PRICES.items():
         if symbol not in market["assets"] or not _valid_price(symbol, market["assets"][symbol]["price"]):

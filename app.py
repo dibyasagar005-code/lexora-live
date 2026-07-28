@@ -1077,9 +1077,15 @@ def api_market():
 
 @app.route("/api/predict/<symbol>")
 def api_predict(symbol):
-    """AI prediction for a symbol."""
+    """AI prediction for a symbol using live market data."""
     try:
-        result = run_prediction(symbol)
+        # Get current market data to use live price
+        market = get_cached_market()
+        current_price = None
+        if market and market.get("assets", {}).get(symbol):
+            current_price = market["assets"][symbol].get("price")
+        
+        result = run_prediction(symbol, current_market_price=current_price)
         return jsonify({"success": True, "data": result})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -1087,9 +1093,10 @@ def api_predict(symbol):
 
 @app.route("/api/predictions/all")
 def api_predictions_all():
-    """All asset predictions."""
+    """All asset predictions using live market data."""
     try:
-        results = predict_all_assets()
+        market = get_cached_market()
+        results = predict_all_assets(market_data=market)
         return jsonify({"success": True, "data": results})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
