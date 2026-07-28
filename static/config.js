@@ -1,5 +1,5 @@
-// Backend API URL
-const BACKEND_URL = 'https://lexora-live.onrender.com';
+// Backend API URL (using static API for GitHub Pages)
+const BACKEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
 
 // Frontend URL (for OAuth redirects)
 const FRONTEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';

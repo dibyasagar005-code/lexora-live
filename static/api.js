@@ -137,10 +137,8 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Check if running locally
-    return window.location.hostname === '127.0.0.1' || 
-           window.location.hostname === 'localhost' ||
-           window.location.port === '5000';
+    // Use static API for GitHub Pages deployment
+    return false;
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
@@ -176,7 +174,12 @@ const LexoraAPI = {
     try {
       const headers = { Accept: "application/json" };
       
-      // Add credentials for cross-origin requests
+      // Add JWT token if available
+      const token = localStorage.getItem('lexora_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const r = await fetch(url, {
         signal: ctrl.signal,
         cache: "no-store",
@@ -395,7 +398,11 @@ const LexoraAPI = {
 
   async fetchCryptoBinance() {
     const out = {};
-    const pairs = { bitcoin: "BTCUSDT", ethereum: "ETHUSDT" };
+    const pairs = {
+      bitcoin: "BTCUSDT", ethereum: "ETHUSDT", ripple: "XRPUSDT",
+      cardano: "ADAUSDT", solana: "SOLUSDT", dogecoin: "DOGEUSDT",
+      polkadot: "DOTUSDT", avalanche: "AVAXUSDT", chainlink: "LINKUSDT"
+    };
     await Promise.all(
       Object.entries(pairs).map(async ([key, sym]) => {
         try {
@@ -463,10 +470,10 @@ const LexoraAPI = {
 
   async fetchCrypto() {
     const binance = await this.fetchCryptoBinance();
-    if (binance.bitcoin && binance.ethereum) return binance;
+    if (Object.keys(binance).length >= 5) return binance;
 
     const path =
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true";
+      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,solana,dogecoin,polkadot,avalanche,chainlink&vs_currencies=usd&include_24hr_change=true";
     let data = {};
     try {
       data = await this.fetchJson(this.cacheBust(path));
@@ -478,28 +485,21 @@ const LexoraAPI = {
       }
     }
     const out = { ...binance };
-    if (data.bitcoin && !out.bitcoin) {
-      out.bitcoin = {
-        price: data.bitcoin.usd,
-        change: data.bitcoin.usd_24h_change || 0,
-        unit: "unit",
-        source: "coingecko",
-      };
-    }
-    if (data.ethereum && !out.ethereum) {
-      out.ethereum = {
-        price: data.ethereum.usd,
-        change: data.ethereum.usd_24h_change || 0,
-        unit: "unit",
-        source: "coingecko",
-      };
-    }
-    for (const key of ["bitcoin", "ethereum"]) {
-      if (!out[key]) {
-        const y = await this.fetchYahoo(key, true);
-        if (y) out[key] = { ...y, source: "yahoo" };
+    const coinMap = {
+      bitcoin: "bitcoin", ethereum: "ethereum", ripple: "ripple",
+      cardano: "cardano", solana: "solana", dogecoin: "dogecoin",
+      polkadot: "polkadot", avalanche: "avalanche-2", chainlink: "chainlink"
+    };
+    Object.entries(coinMap).forEach(([key, coinId]) => {
+      if (data[coinId] && !out[key]) {
+        out[key] = {
+          price: data[coinId].usd,
+          change: data[coinId].usd_24h_change || 0,
+          unit: "unit",
+          source: "coingecko",
+        };
       }
-    }
+    });
     return out;
   },
 
@@ -735,20 +735,22 @@ const LexoraAPI = {
     const [ibjaR, mintedR, cryptoR, forexR] = await Promise.allSettled([
       this.withTimeout(this.fetchIBJAIndia(), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchMintedMetal(), this.FETCH_TIMEOUT),
-      this.withTimeout(this.fetchCryptoBinance(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchCrypto(), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchForex(), this.FETCH_TIMEOUT),
     ]);
 
     const ibja = this.unwrapSettled(ibjaR) || {};
     const minted = this.unwrapSettled(mintedR) || {};
+    const crypto = this.unwrapSettled(cryptoR) || {};
+    const forex = this.unwrapSettled(forexR) || {};
 
     return {
       gold: this.mergeMetalQuote(ibja.gold, minted.gold),
       silver: this.mergeMetalQuote(ibja.silver, minted.silver),
       platinum: minted.platinum,
       palladium: minted.palladium,
-      crypto: this.unwrapSettled(cryptoR) || {},
-      forex: this.unwrapSettled(forexR) || {},
+      crypto: crypto,
+      forex: forex,
     };
   },
 
@@ -774,25 +776,9 @@ const LexoraAPI = {
     return out;
   },
 
-  /** Main market fetch — fast APIs first, always returns all assets */
+  /** Main market fetch — static APIs only for GitHub Pages */
   async fetchMarket(force = false) {
-    // Use local Flask backend when running locally
-    if (this.isLocalFlask()) {
-      try {
-        const url = force ? '/api/market?fresh=1' : '/api/market';
-        const r = await this.withTimeout(
-          this.fetchJson(url),
-          this.FETCH_TIMEOUT
-        );
-        if (r && r.assets) {
-          return r;
-        }
-      } catch (e) {
-        console.warn("[LexorA] Backend API failed, using fallback:", e.message);
-      }
-    }
-    
-    // Fallback to direct API calls
+    // Use static APIs only for GitHub Pages deployment
     const assets = {};
     const fast = await this.fetchMarketFastLane();
 
@@ -992,17 +978,18 @@ const LexoraAPI = {
   },
 
   async predict(symbol, market) {
-    // Use local Flask backend when running locally
-    if (this.isLocalFlask()) {
-      try {
-        const j = await this.withTimeout(
-          this.fetchJson(`/api/predict/${symbol}`),
-          8000
-        );
-        if (j.success && j.data) return j.data;
-      } catch (e) {
-        console.warn("[LexorA] Backend predict:", e.message);
-      }
+    // Always try backend API first since we have deployed backend
+    try {
+      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+      const j = await this.withTimeout(
+        fetch(this.cacheBust(`${backendUrl}/api/predict/${symbol}`), {
+          credentials: 'include'
+        }).then((r) => r.json()),
+        8000
+      );
+      if (j.success && j.data) return j.data;
+    } catch (e) {
+      console.warn("[LexorA] Backend predict:", e.message);
     }
     const live = market?.assets?.[symbol];
     const livePrice =
@@ -1015,17 +1002,18 @@ const LexoraAPI = {
   },
 
   async predictAll(market) {
-    // Use local Flask backend when running locally
-    if (this.isLocalFlask()) {
-      try {
-        const j = await this.withTimeout(
-          this.fetchJson('/api/predictions/all'),
-          10000
-        );
-        if (j.success && j.data) return j.data;
-      } catch (e) {
-        console.warn("[LexorA] Backend predictAll:", e.message);
-      }
+    // Always try backend API first since we have deployed backend
+    try {
+      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+      const j = await this.withTimeout(
+        fetch(this.cacheBust(`${backendUrl}/api/predictions/all`), {
+          credentials: 'include'
+        }).then((r) => r.json()),
+        10000
+      );
+      if (j.success && j.data) return j.data;
+    } catch (e) {
+      console.warn("[LexorA] Backend predictAll:", e.message);
     }
     const m = market || (typeof LexoraApp !== "undefined" ? LexoraApp.market : null);
     const syms = [

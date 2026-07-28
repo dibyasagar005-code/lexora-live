@@ -218,78 +218,16 @@ def fetch_yahoo_ticker(ticker, key):
         stock = yf.Ticker(ticker)
         hist = stock.history(period="5d")
         if hist.empty:
-            print(f"[API] Yahoo Finance no data for {ticker}")
             return None
         price = float(hist["Close"].iloc[-1])
         if not _valid_price(key, price):
-            print(f"[API] Yahoo Finance invalid price for {ticker}: {price}")
             return None
         prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
         change = ((price - prev) / prev) * 100 if prev else 0
         unit = "oz" if key in ("gold", "silver", "platinum", "palladium") else "lb" if key == "copper" else "unit"
-        print(f"[API] Yahoo Finance success for {ticker}: {price}")
         return {"price": round(price, 4), "change": round(change, 2), "symbol": key.upper(), "unit": unit}
     except Exception as e:
-        print(f"[API] Yahoo Finance error for {ticker}: {e}")
-        return None
-
-
-def fetch_stock_twelve_data(symbol, key):
-    """Fetch stock data from Twelve Data API (free tier)."""
-    try:
-        api_key = os.environ.get("TWELVE_DATA_API_KEY")
-        if not api_key:
-            print(f"[API] Twelve Data API key not found")
-            return None
-        
-        url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={api_key}"
-        result = _safe_request(url)
-        if not result:
-            return None
-        
-        price = float(result.get("price", 0))
-        if not _valid_price(key, price):
-            return None
-        
-        # Get previous close for change calculation
-        url_prev = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=1day&outputsize=2&apikey={api_key}"
-        result_prev = _safe_request(url_prev)
-        change = 0
-        if result_prev and "values" in result_prev and len(result_prev["values"]) >= 2:
-            prev_price = float(result_prev["values"][1]["close"])
-            change = ((price - prev_price) / prev_price) * 100 if prev_price else 0
-        
-        print(f"[API] Twelve Data success for {symbol}: {price}")
-        return {"price": round(price, 4), "change": round(change, 2), "symbol": key.upper(), "unit": "unit"}
-    except Exception as e:
-        print(f"[API] Twelve Data error for {symbol}: {e}")
-        return None
-
-
-def fetch_stock_financialmodelingprep(symbol, key):
-    """Fetch stock data from Financial Modeling Prep API (free tier)."""
-    try:
-        api_key = os.environ.get("FMP_API_KEY")
-        if not api_key:
-            print(f"[API] FMP API key not found")
-            return None
-        
-        url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={api_key}"
-        result = _safe_request(url)
-        if not result or not isinstance(result, list) or len(result) == 0:
-            return None
-        
-        data = result[0]
-        price = float(data.get("price", 0))
-        if not _valid_price(key, price):
-            return None
-        
-        change = float(data.get("changesPercentage", 0))
-        
-        print(f"[API] FMP success for {symbol}: {price}")
-        return {"price": round(price, 4), "change": round(change, 2), "symbol": key.upper(), "unit": "unit"}
-    except Exception as e:
-        print(f"[API] FMP error for {symbol}: {e}")
+        print(f"[API] Yahoo ticker {ticker} error: {e}")
         return None
 
 
@@ -475,23 +413,18 @@ def fetch_crypto_binance():
         "chainlink": "LINKUSDT",
     }
     for key, sym in pairs.items():
-        try:
-            result = _safe_request(f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}")
-            if not result:
-                print(f"[API] Binance failed for {sym}")
-                continue
-            price = float(result.get("lastPrice", 0))
-            if _valid_price(key, price):
-                data[key] = {
-                    "price": price,
-                    "change": float(result.get("priceChangePercent", 0)),
-                    "unit": "unit",
-                    "live": True,
-                    "apiSource": "binance",
-                }
-                print(f"[API] Binance success for {key}: {price}")
-        except Exception as e:
-            print(f"[API] Binance error for {sym}: {e}")
+        result = _safe_request(f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}")
+        if not result:
+            continue
+        price = float(result.get("lastPrice", 0))
+        if _valid_price(key, price):
+            data[key] = {
+                "price": price,
+                "change": float(result.get("priceChangePercent", 0)),
+                "unit": "unit",
+                "live": True,
+                "apiSource": "binance",
+            }
     return data
 
 
@@ -741,38 +674,7 @@ def fetch_market_data():
     # 3. Fetch forex from Frankfurter (reliable)
     market["assets"].update(fetch_forex_extended())
 
-    # 4. Try alternative stock APIs for individual stocks (Apple, Microsoft, Google, Amazon, Tesla)
-    stock_symbols = {
-        "apple": "AAPL",
-        "microsoft": "MSFT", 
-        "google": "GOOGL",
-        "amazon": "AMZN",
-        "tesla": "TSLA"
-    }
-    for key, symbol in stock_symbols.items():
-        if key not in market["assets"] or not market["assets"][key].get("live"):
-            # Try Twelve Data API first
-            data = fetch_stock_twelve_data(symbol, key)
-            if data:
-                data["live"] = True
-                data["apiSource"] = "twelvedata"
-                market["assets"][key] = data
-            # Fallback to FMP API
-            elif not data:
-                data = fetch_stock_financialmodelingprep(symbol, key)
-                if data:
-                    data["live"] = True
-                    data["apiSource"] = "fmp"
-                    market["assets"][key] = data
-            # Fallback to Yahoo Finance
-            elif not data:
-                row = fetch_yahoo_asset(key)
-                if row:
-                    row["live"] = True
-                    row["apiSource"] = "yahoo"
-                    market["assets"][key] = row
-
-    # 5. Try Yahoo Finance as backup for remaining assets (with error handling)
+    # 4. Try Yahoo Finance as backup for remaining assets (with error handling)
     # Only try for critical assets that don't have alternatives
     yahoo_priority = ["gold", "silver", "platinum", "palladium", "copper", "crude_oil", "natural_gas"]
     for key in yahoo_priority:

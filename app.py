@@ -355,7 +355,7 @@ def google_callback():
     """Google OAuth callback."""
     if not google_oauth:
         flash("Google OAuth is not configured.", "error")
-        return redirect("/login")
+        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
     
     code = request.args.get("code")
     if not code:
@@ -632,6 +632,7 @@ def setup_2fa():
 
 
 @app.route("/auth/2fa/verify", methods=["POST"])
+@login_required
 def verify_2fa():
     """Verify TOTP code during setup."""
     user_id = session.get("user_id")
@@ -668,6 +669,7 @@ def verify_2fa():
 
 
 @app.route("/auth/2fa/disable", methods=["POST"])
+@login_required
 def disable_2fa():
     """Disable Two-Factor Authentication."""
     user_id = session.get("user_id")
@@ -699,6 +701,7 @@ def disable_2fa():
 
 
 @app.route("/auth/2fa/status", methods=["GET"])
+@login_required
 def get_2fa_status():
     """Get 2FA status for user."""
     user_id = session.get("user_id")
@@ -725,6 +728,7 @@ def get_2fa_status():
 
 
 @app.route("/api/security/login-history", methods=["GET"])
+@login_required
 def get_login_history():
     """Get login history for security dashboard."""
     user_id = session.get("user_id")
@@ -792,6 +796,7 @@ def revoke_session(session_id):
 
 
 @app.route("/api/security/sessions/revoke-all", methods=["POST"])
+@login_required
 def revoke_all_sessions():
     """Revoke all sessions except current."""
     user_id = session.get("user_id")
@@ -818,6 +823,7 @@ def revoke_all_sessions():
 
 
 @app.route("/api/notifications", methods=["GET"])
+@login_required
 def get_notifications():
     """Get unread notifications for the current user."""
     user_id = session.get("user_id")
@@ -831,6 +837,7 @@ def get_notifications():
 
 
 @app.route("/api/notifications/<int:notification_id>/read", methods=["POST"])
+@login_required
 def mark_notification_read_api(notification_id):
     """Mark a notification as read."""
     user_id = session.get("user_id")
@@ -922,20 +929,19 @@ def prediction(symbol="bitcoin"):
 
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
-    """User dashboard with portfolio and predictions - accessible without login."""
+    """User dashboard with portfolio and predictions."""
     user_id = session.get("user_id")
     predictions = get_predictions(limit=10)
-    portfolio = get_portfolio(user_id) if user_id else []
-    watchlist = get_watchlist(user_id) if user_id else []
-    notifications = get_notifications(user_id) if user_id else []
+    portfolio = get_portfolio(user_id)
+    watchlist = get_watchlist(user_id)
+    notifications = get_notifications(user_id)
     market = get_cached_market()
-    user = None
-    if user_id:
-        from models.database import get_db
-        with get_db() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-            user = dict(row) if row else None
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
     return render_template(
         "dashboard.html",
         predictions=predictions,
@@ -948,35 +954,33 @@ def dashboard():
 
 
 @app.route("/watchlist")
+@login_required
 def watchlist():
-    """User watchlist page - accessible without login."""
+    """User watchlist page."""
     user_id = session.get("user_id")
-    watchlist = get_watchlist(user_id) if user_id else []
+    watchlist = get_watchlist(user_id)
     market = get_cached_market()
-    user = None
-    if user_id:
-        from models.database import get_db
-        with get_db() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-            user = dict(row) if row else None
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
     return render_template("watchlist.html", watchlist=watchlist, market=market, user=user)
 
 
 @app.route("/history")
+@login_required
 def history():
-    """Price and prediction history - accessible without login."""
+    """Price and prediction history - requires login."""
     user_id = session.get("user_id")
     symbol = request.args.get("symbol", "bitcoin")
     prices = get_price_history(symbol, limit=100)
-    predictions = get_predictions(symbol, limit=20) if user_id else []
+    predictions = get_predictions(symbol, limit=20)
     curated = get_curated_history(symbol, limit=50)
     market = get_cached_market()
-    user = None
-    if user_id:
-        from models.database import get_db
-        with get_db() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-            user = dict(row) if row else None
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
     return render_template(
         "history.html",
         prices=prices,
@@ -989,16 +993,15 @@ def history():
 
 
 @app.route("/settings")
+@login_required
 def settings():
-    """User settings page - accessible without login."""
+    """User settings page."""
     user_id = session.get("user_id")
     market = get_cached_market()
-    user = None
-    if user_id:
-        from models.database import get_db
-        with get_db() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-            user = dict(row) if row else None
+    from models.database import get_db
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = dict(row) if row else None
     return render_template("settings.html", market=market, user=user)
 
 
