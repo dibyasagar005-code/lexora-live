@@ -14,7 +14,6 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     session, jsonify, flash,
 )
-from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from dotenv import load_dotenv
@@ -46,20 +45,10 @@ from auth.auth import AuthManager, hash_password, verify_password, generate_rese
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "lexora-ai-market-predictor-2024-secret")
-app.config["SESSION_PERMANENT"] = True
-app.config["SESSION_COOKIE_SECURE"] = True  # Required for HTTPS
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_COOKIE_SECURE"] = False  # Local development
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "None"  # None for cross-origin
-
-# Enable CORS for cross-origin requests from GitHub Pages
-CORS(app, resources={
-    r"/*": {
-        "origins": ["https://dibyasagar005-code.github.io", "https://lexora-live.onrender.com"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }
-})
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Local development
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -88,7 +77,7 @@ if os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET")
     google_oauth = GoogleOAuth(
         client_id=os.environ.get("GOOGLE_CLIENT_ID"),
         client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-        redirect_uri=os.environ.get("APP_URL", "https://lexora-live.onrender.com") + "/auth/google/callback"
+        redirect_uri="http://127.0.0.1:5000/auth/google/callback"
     )
 
 # Initialize GitHub OAuth
@@ -97,7 +86,7 @@ if os.environ.get("GITHUB_CLIENT_ID") and os.environ.get("GITHUB_CLIENT_SECRET")
     github_oauth = GitHubOAuth(
         client_id=os.environ.get("GITHUB_CLIENT_ID"),
         client_secret=os.environ.get("GITHUB_CLIENT_SECRET"),
-        redirect_uri=os.environ.get("APP_URL", "https://lexora-live.onrender.com") + "/auth/github/callback"
+        redirect_uri="http://127.0.0.1:5000/auth/github/callback"
     )
 
 

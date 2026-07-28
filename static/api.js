@@ -137,8 +137,10 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Always use Render backend for public deployment
-    return false;
+    // Check if running locally
+    return window.location.hostname === '127.0.0.1' || 
+           window.location.hostname === 'localhost' ||
+           window.location.port === '5000';
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
@@ -774,19 +776,20 @@ const LexoraAPI = {
 
   /** Main market fetch — fast APIs first, always returns all assets */
   async fetchMarket(force = false) {
-    // Always use Render backend for public deployment
-    try {
-      const backendUrl = 'https://lexora-live.onrender.com';
-      const url = force ? `${backendUrl}/api/market?fresh=1` : `${backendUrl}/api/market`;
-      const r = await this.withTimeout(
-        this.fetchJson(url),
-        this.FETCH_TIMEOUT
-      );
-      if (r && r.assets) {
-        return r;
+    // Use local Flask backend when running locally
+    if (this.isLocalFlask()) {
+      try {
+        const url = force ? '/api/market?fresh=1' : '/api/market';
+        const r = await this.withTimeout(
+          this.fetchJson(url),
+          this.FETCH_TIMEOUT
+        );
+        if (r && r.assets) {
+          return r;
+        }
+      } catch (e) {
+        console.warn("[LexorA] Backend API failed, using fallback:", e.message);
       }
-    } catch (e) {
-      console.warn("[LexorA] Backend API failed, using fallback:", e.message);
     }
     
     // Fallback to direct API calls
@@ -989,15 +992,17 @@ const LexoraAPI = {
   },
 
   async predict(symbol, market) {
-    // Always use Render backend for public deployment
-    try {
-      const j = await this.withTimeout(
-        this.fetchJson(`https://lexora-live.onrender.com/api/predict/${symbol}`),
-        8000
-      );
-      if (j.success && j.data) return j.data;
-    } catch (e) {
-      console.warn("[LexorA] Backend predict:", e.message);
+    // Use local Flask backend when running locally
+    if (this.isLocalFlask()) {
+      try {
+        const j = await this.withTimeout(
+          this.fetchJson(`/api/predict/${symbol}`),
+          8000
+        );
+        if (j.success && j.data) return j.data;
+      } catch (e) {
+        console.warn("[LexorA] Backend predict:", e.message);
+      }
     }
     const live = market?.assets?.[symbol];
     const livePrice =
@@ -1010,15 +1015,17 @@ const LexoraAPI = {
   },
 
   async predictAll(market) {
-    // Always use Render backend for public deployment
-    try {
-      const j = await this.withTimeout(
-        this.fetchJson('https://lexora-live.onrender.com/api/predictions/all'),
-        10000
-      );
-      if (j.success && j.data) return j.data;
-    } catch (e) {
-      console.warn("[LexorA] Backend predictAll:", e.message);
+    // Use local Flask backend when running locally
+    if (this.isLocalFlask()) {
+      try {
+        const j = await this.withTimeout(
+          this.fetchJson('/api/predictions/all'),
+          10000
+        );
+        if (j.success && j.data) return j.data;
+      } catch (e) {
+        console.warn("[LexorA] Backend predictAll:", e.message);
+      }
     }
     const m = market || (typeof LexoraApp !== "undefined" ? LexoraApp.market : null);
     const syms = [
