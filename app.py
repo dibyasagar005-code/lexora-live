@@ -22,7 +22,6 @@ import pyotp
 import qrcode
 import io
 import base64
-import jwt
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -61,9 +60,6 @@ CORS(app, resources={
         "supports_credentials": True
     }
 })
-
-# Note: CSRF protection disabled for API compatibility
-# CSRF will be handled by CORS and session-based authentication
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -243,12 +239,8 @@ def auth_login():
             login_count = get_user_login_count(user['id'])
             if login_count > 1:
                 create_notification(user['id'], f"Welcome back! This is your #{login_count} login to LexorA.")
-            
-            # Generate JWT token for cross-origin authentication
-            token = generate_jwt_token(user['id'], email)
-            return jsonify({"success": True, "token": token, "redirect": "https://dibyasagar005-code.github.io/lexora-live/index.html"})
         
-        return jsonify({"success": True, "redirect": "https://dibyasagar005-code.github.io/lexora-live/index.html"})
+        return jsonify({"success": True, "redirect": "/"})
     else:
         record_login_attempt(email)
         return jsonify(result)
@@ -304,29 +296,16 @@ def auth_register():
     
     result = auth_manager.register_user(username, email, password)
     if result["success"]:
-        return jsonify({"success": True, "message": "Registration successful! You can now login.", "redirect": "https://dibyasagar005-code.github.io/lexora-live/login.html"})
+        return jsonify({"success": True, "message": "Registration successful! You can now login.", "redirect": "/login"})
     return jsonify(result)
 
 
 @app.route("/api/auth/status")
 def api_auth_status():
-    """Check authentication status with JWT token support."""
-    # Check Authorization header for JWT token
-    auth_header = request.headers.get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-        user_id = verify_jwt_token(token)
-        if user_id:
-            return jsonify({
-                "logged_in": True,
-                "user_id": user_id
-            })
-    
-    # Fallback to session-based auth
-    return jsonify({
-        "logged_in": auth_manager.is_logged_in(),
-        "user_id": session.get("user_id")
-    })
+    """Check authentication status."""
+    if current_user.is_authenticated:
+        return jsonify({"authenticated": True, "user": {"username": current_user.username, "email": current_user.email}})
+    return jsonify({"authenticated": False})
 
 
 @app.route("/auth/logout", methods=["POST", "OPTIONS"])
@@ -387,12 +366,12 @@ def google_callback():
     """Google OAuth callback."""
     if not google_oauth:
         flash("Google OAuth is not configured.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     code = request.args.get("code")
     if not code:
         flash("Authorization failed. Please try again.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     try:
         # Exchange code for token
@@ -400,7 +379,7 @@ def google_callback():
         
         if "error" in token_response:
             flash(f"OAuth error: {token_response.get('error_description', token_response['error'])}", "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
         
         access_token = token_response.get("access_token")
         
@@ -413,26 +392,21 @@ def google_callback():
         
         if not google_id or not email:
             flash("Failed to get user information from Google.", "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
         
         # Authenticate or register user
         result = auth_manager.authenticate_google(google_id, email, name)
         
         if result["success"]:
-            # Generate JWT token for cross-origin authentication
-            from models.database import get_user_by_email
-            user = get_user_by_email(email)
-            if user:
-                token = generate_jwt_token(user['id'], email)
-                return redirect(f"https://dibyasagar005-code.github.io/lexora-live/index.html?token={token}")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/index.html")
+            flash(f"Welcome, {name}!", "success")
+            return redirect("/")
         else:
             flash(result.get("error", "Authentication failed"), "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
             
     except Exception as e:
         flash(f"Authentication error: {str(e)}", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
 
 
 @app.route("/auth/github")
@@ -440,7 +414,7 @@ def github_login():
     """Initiate GitHub OAuth login."""
     if not github_oauth:
         flash("GitHub OAuth is not configured.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     auth_url = github_oauth.get_auth_url()
     return redirect(auth_url)
@@ -451,7 +425,7 @@ def github_callback():
     """GitHub OAuth callback handler."""
     if not github_oauth:
         flash("GitHub OAuth is not configured.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     code = request.args.get("code")
     state = request.args.get("state")
@@ -459,18 +433,18 @@ def github_callback():
     
     if error:
         flash(f"GitHub OAuth error: {error}", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     if not code:
         flash("Authorization failed. Please try again.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     try:
         # Exchange code for token
         access_token = github_oauth.get_access_token(code)
         if not access_token:
             flash("Failed to exchange authorization code for token.", "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
         
         # Get user info
         user_info = github_oauth.get_user_info(access_token)
@@ -499,9 +473,8 @@ def github_callback():
                 ))
                 conn.commit()
                 
-                # Generate JWT token for cross-origin authentication
-                token = generate_jwt_token(user["id"], email)
-                return redirect(f"https://dibyasagar005-code.github.io/lexora-live/index.html?token={token}")
+                flash(f"Welcome back, {username}!", "success")
+                return redirect("/")
             else:
                 # New user - create account
                 username = user_info["username"] or user_info["email"].split("@")[0]
@@ -516,7 +489,7 @@ def github_callback():
                 cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
                 if cursor.fetchone():
                     flash("Email already registered. Please login with your existing account.", "error")
-                    return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+                    return redirect("/login")
                 
                 # Create user
                 cursor.execute("""
@@ -542,13 +515,12 @@ def github_callback():
                 ))
                 conn.commit()
                 
-                # Generate JWT token for cross-origin authentication
-                token = generate_jwt_token(user_id, email)
-                return redirect(f"https://dibyasagar005-code.github.io/lexora-live/index.html?token={token}")
+                flash(f"Welcome, {username}!", "success")
+                return redirect("/")
     
     except Exception as e:
         flash(f"GitHub OAuth error: {str(e)}", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
 
 
 @app.route("/auth/send-otp", methods=["POST", "OPTIONS"])
@@ -671,7 +643,6 @@ def setup_2fa():
 
 
 @app.route("/auth/2fa/verify", methods=["POST"])
-@login_required
 def verify_2fa():
     """Verify TOTP code during setup."""
     user_id = session.get("user_id")
@@ -708,7 +679,6 @@ def verify_2fa():
 
 
 @app.route("/auth/2fa/disable", methods=["POST"])
-@login_required
 def disable_2fa():
     """Disable Two-Factor Authentication."""
     user_id = session.get("user_id")
@@ -740,7 +710,6 @@ def disable_2fa():
 
 
 @app.route("/auth/2fa/status", methods=["GET"])
-@login_required
 def get_2fa_status():
     """Get 2FA status for user."""
     user_id = session.get("user_id")
@@ -767,7 +736,6 @@ def get_2fa_status():
 
 
 @app.route("/api/security/login-history", methods=["GET"])
-@login_required
 def get_login_history():
     """Get login history for security dashboard."""
     user_id = session.get("user_id")
@@ -835,7 +803,6 @@ def revoke_session(session_id):
 
 
 @app.route("/api/security/sessions/revoke-all", methods=["POST"])
-@login_required
 def revoke_all_sessions():
     """Revoke all sessions except current."""
     user_id = session.get("user_id")
@@ -862,7 +829,6 @@ def revoke_all_sessions():
 
 
 @app.route("/api/notifications", methods=["GET"])
-@login_required
 def get_notifications():
     """Get unread notifications for the current user."""
     user_id = session.get("user_id")
@@ -876,7 +842,6 @@ def get_notifications():
 
 
 @app.route("/api/notifications/<int:notification_id>/read", methods=["POST"])
-@login_required
 def mark_notification_read_api(notification_id):
     """Mark a notification as read."""
     user_id = session.get("user_id")
@@ -968,19 +933,20 @@ def prediction(symbol="bitcoin"):
 
 
 @app.route("/dashboard")
-@login_required
 def dashboard():
-    """User dashboard with portfolio and predictions."""
+    """User dashboard with portfolio and predictions - accessible without login."""
     user_id = session.get("user_id")
     predictions = get_predictions(limit=10)
-    portfolio = get_portfolio(user_id)
-    watchlist = get_watchlist(user_id)
-    notifications = get_notifications(user_id)
+    portfolio = get_portfolio(user_id) if user_id else []
+    watchlist = get_watchlist(user_id) if user_id else []
+    notifications = get_notifications(user_id) if user_id else []
     market = get_cached_market()
-    from models.database import get_db
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        user = dict(row) if row else None
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            user = dict(row) if row else None
     return render_template(
         "dashboard.html",
         predictions=predictions,
@@ -993,33 +959,35 @@ def dashboard():
 
 
 @app.route("/watchlist")
-@login_required
 def watchlist():
-    """User watchlist page."""
+    """User watchlist page - accessible without login."""
     user_id = session.get("user_id")
-    watchlist = get_watchlist(user_id)
+    watchlist = get_watchlist(user_id) if user_id else []
     market = get_cached_market()
-    from models.database import get_db
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        user = dict(row) if row else None
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            user = dict(row) if row else None
     return render_template("watchlist.html", watchlist=watchlist, market=market, user=user)
 
 
 @app.route("/history")
-@login_required
 def history():
-    """Price and prediction history - requires login."""
+    """Price and prediction history - accessible without login."""
     user_id = session.get("user_id")
     symbol = request.args.get("symbol", "bitcoin")
     prices = get_price_history(symbol, limit=100)
-    predictions = get_predictions(symbol, limit=20)
+    predictions = get_predictions(symbol, limit=20) if user_id else []
     curated = get_curated_history(symbol, limit=50)
     market = get_cached_market()
-    from models.database import get_db
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        user = dict(row) if row else None
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            user = dict(row) if row else None
     return render_template(
         "history.html",
         prices=prices,
@@ -1032,15 +1000,16 @@ def history():
 
 
 @app.route("/settings")
-@login_required
 def settings():
-    """User settings page."""
+    """User settings page - accessible without login."""
     user_id = session.get("user_id")
     market = get_cached_market()
-    from models.database import get_db
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        user = dict(row) if row else None
+    user = None
+    if user_id:
+        from models.database import get_db
+        with get_db() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            user = dict(row) if row else None
     return render_template("settings.html", market=market, user=user)
 
 

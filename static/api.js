@@ -137,8 +137,8 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Always try backend API first since we have deployed backend
-    return true;
+    // Always use Render backend for public deployment
+    return false;
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
@@ -174,12 +174,7 @@ const LexoraAPI = {
     try {
       const headers = { Accept: "application/json" };
       
-      // Add JWT token if available
-      const token = localStorage.getItem('lexora_token');
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
+      // Add credentials for cross-origin requests
       const r = await fetch(url, {
         signal: ctrl.signal,
         cache: "no-store",
@@ -779,25 +774,22 @@ const LexoraAPI = {
 
   /** Main market fetch — fast APIs first, always returns all assets */
   async fetchMarket(force = false) {
-    // Always try backend API first since we have deployed backend
+    // Always use Render backend for public deployment
     try {
-      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
+      const backendUrl = 'https://lexora-live.onrender.com';
       const url = force ? `${backendUrl}/api/market?fresh=1` : `${backendUrl}/api/market`;
       const r = await this.withTimeout(
-        fetch(this.cacheBust(url), { 
-          cache: "no-store",
-          credentials: 'include'
-        }).then((res) => {
-          if (!res.ok) throw new Error(String(res.status));
-          return res.json();
-        }),
-        12000
+        this.fetchJson(url),
+        this.FETCH_TIMEOUT
       );
-      if (r?.assets && Object.keys(r.assets).length) return r;
+      if (r && r.assets) {
+        return r;
+      }
     } catch (e) {
-      console.warn("[LexorA] Backend /api/market:", e.message);
+      console.warn("[LexorA] Backend API failed, using fallback:", e.message);
     }
-
+    
+    // Fallback to direct API calls
     const assets = {};
     const fast = await this.fetchMarketFastLane();
 
@@ -997,13 +989,10 @@ const LexoraAPI = {
   },
 
   async predict(symbol, market) {
-    // Always try backend API first since we have deployed backend
+    // Always use Render backend for public deployment
     try {
-      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
       const j = await this.withTimeout(
-        fetch(this.cacheBust(`${backendUrl}/api/predict/${symbol}`), {
-          credentials: 'include'
-        }).then((r) => r.json()),
+        this.fetchJson(`https://lexora-live.onrender.com/api/predict/${symbol}`),
         8000
       );
       if (j.success && j.data) return j.data;
@@ -1021,13 +1010,10 @@ const LexoraAPI = {
   },
 
   async predictAll(market) {
-    // Always try backend API first since we have deployed backend
+    // Always use Render backend for public deployment
     try {
-      const backendUrl = window.API_BASE_URL || 'https://lexora-live.onrender.com';
       const j = await this.withTimeout(
-        fetch(this.cacheBust(`${backendUrl}/api/predictions/all`), {
-          credentials: 'include'
-        }).then((r) => r.json()),
+        this.fetchJson('https://lexora-live.onrender.com/api/predictions/all'),
         10000
       );
       if (j.success && j.data) return j.data;
