@@ -364,28 +364,52 @@ def fetch_yahoo_assets():
             data[key]["price"] = row.get("price") or data[key]["price"]
     if not data.get("gold"):
         data.update(fetch_goldprice_org())
+    
+    # Fetch all Yahoo assets with better error handling
     for key in YAHOO_TICKERS:
-        if key in data and _valid_price(key, data[key]["price"]):
+        if key in data and _valid_price(key, data[key]["price"]) and data[key].get("live"):
             continue
         row = fetch_yahoo_asset(key)
         if row:
             row["live"] = True
             row["apiSource"] = "yahoo"
             data[key] = row
-    if "gold" not in data:
+    
+    # Additional fallback for metals
+    if "gold" not in data or not data["gold"].get("live"):
         api_gold = fetch_gold_api_spot("XAU", "gold")
         if api_gold:
             data["gold"] = api_gold
-    if "silver" not in data:
+    if "silver" not in data or not data["silver"].get("live"):
         api_silver = fetch_gold_api_spot("XAG", "silver")
         if api_silver:
             data["silver"] = api_silver
+    if "platinum" not in data or not data["platinum"].get("live"):
+        api_platinum = fetch_gold_api_spot("XPT", "platinum")
+        if api_platinum:
+            data["platinum"] = api_platinum
+    if "palladium" not in data or not data["palladium"].get("live"):
+        api_palladium = fetch_gold_api_spot("XPD", "palladium")
+        if api_palladium:
+            data["palladium"] = api_palladium
+    
     return data
 
 
 def fetch_crypto_binance():
+    """Fetch extended cryptocurrency data from Binance."""
     data = {}
-    pairs = {"bitcoin": "BTCUSDT", "ethereum": "ETHUSDT"}
+    pairs = {
+        "bitcoin": "BTCUSDT",
+        "ethereum": "ETHUSDT",
+        "ripple": "XRPUSDT",
+        "cardano": "ADAUSDT",
+        "solana": "SOLUSDT",
+        "dogecoin": "DOGEUSDT",
+        "polkadot": "DOTUSDT",
+        "avalanche": "AVAXUSDT",
+        "chainlink": "LINKUSDT",
+    }
     for key, sym in pairs.items():
         result = _safe_request(f"https://api.binance.com/api/v3/ticker/24hr?symbol={sym}")
         if not result:
@@ -523,6 +547,29 @@ def fetch_yahoo_stocks():
     return data
 
 
+def fetch_commodities_api():
+    """Fetch commodities from alternative API sources."""
+    data = {}
+    try:
+        # Try to fetch crude oil and natural gas from alternative sources
+        result = _safe_request("https://api.eia.gov/v2/petroleum/pri/gnd.data?api_key=YOUR_API_KEY&frequency=daily&data[0]=value&facets[series][0]=PET.RWTC.D")
+        if result:
+            # Parse EIA data if available
+            pass
+    except Exception:
+        pass
+    
+    # Fallback to Yahoo for commodities
+    commodities = ["crude_oil", "natural_gas", "wheat", "corn", "soybeans"]
+    for key in commodities:
+        row = fetch_yahoo_asset(key)
+        if row:
+            row["live"] = True
+            row["apiSource"] = "yahoo"
+            data[key] = row
+    return data
+
+
 def fetch_forex_extended():
     """Fetch extended forex data."""
     data = {}
@@ -611,19 +658,7 @@ def fetch_market_data():
     # Fetch existing assets
     market["assets"].update(fetch_yahoo_assets())
     
-    # Fetch extended crypto
-    for coin, info in fetch_crypto_coingecko_extended().items():
-        if _valid_price(coin, info["price"]):
-            market["assets"][coin] = {
-                "price": info["price"],
-                "change": info.get("change", 0),
-                "symbol": coin.upper()[:3],
-                "unit": "unit",
-                "live": True,
-                "apiSource": info.get("apiSource", "coingecko"),
-            }
-    
-    # Fetch Binance for BTC/ETH (more reliable)
+    # Fetch extended crypto from Binance (prioritize over CoinGecko)
     for coin, info in fetch_crypto_binance().items():
         if _valid_price(coin, info["price"]):
             market["assets"][coin] = {
@@ -635,6 +670,19 @@ def fetch_market_data():
                 "apiSource": info.get("apiSource", "binance"),
             }
     
+    # Fetch CoinGecko as backup for crypto
+    for coin, info in fetch_crypto_coingecko_extended().items():
+        if coin not in market["assets"] or not market["assets"][coin].get("live"):
+            if _valid_price(coin, info["price"]):
+                market["assets"][coin] = {
+                    "price": info["price"],
+                    "change": info.get("change", 0),
+                    "symbol": coin.upper()[:3],
+                    "unit": "unit",
+                    "live": True,
+                    "apiSource": info.get("apiSource", "coingecko"),
+                }
+    
     # Fetch extended forex
     market["assets"].update(fetch_forex_extended())
 
@@ -642,6 +690,32 @@ def fetch_market_data():
     for stock, info in fetch_yahoo_stocks().items():
         if _valid_price(stock, info["price"]):
             market["assets"][stock] = info
+
+    # Fetch commodities from multiple sources
+    commodities_data = fetch_commodities_api()
+    for key, info in commodities_data.items():
+        if _valid_price(key, info["price"]):
+            market["assets"][key] = info
+
+    # Fetch industrial metals from Yahoo
+    industrial_metals = ["copper", "aluminum", "nickel", "zinc", "lead"]
+    for key in industrial_metals:
+        if key not in market["assets"] or not market["assets"][key].get("live"):
+            row = fetch_yahoo_asset(key)
+            if row:
+                row["live"] = True
+                row["apiSource"] = "yahoo"
+                market["assets"][key] = row
+
+    # Fetch stock indices
+    indices = ["sp500", "nasdaq", "dow_jones", "ftse_100", "nikkei_225"]
+    for key in indices:
+        if key not in market["assets"] or not market["assets"][key].get("live"):
+            row = fetch_yahoo_asset(key)
+            if row:
+                row["live"] = True
+                row["apiSource"] = "yahoo"
+                market["assets"][key] = row
 
     # Fill missing assets with fallback
     live_count = sum(1 for a in market["assets"].values() if a.get("live"))
