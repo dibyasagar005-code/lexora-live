@@ -1,8 +1,8 @@
-// Backend API URL (local Flask backend)
-const BACKEND_URL = 'http://127.0.0.1:5000';
+// Backend API URL (using static API for GitHub Pages)
+const BACKEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
 
 // Frontend URL (for OAuth redirects)
-const FRONTEND_URL = 'http://127.0.0.1:5000';
+const FRONTEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
 
 // App configuration
 const CONFIG = {
