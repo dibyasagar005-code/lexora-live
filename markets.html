@@ -36,7 +36,7 @@
                     {{ "%+.2f"|format(asset.change) }}%
                 </td>
                 <td><span class="signal-badge hold" data-signal="{{ symbol }}">—</span></td>
-                <td><a href="{{ url_for('prediction', symbol=symbol) }}" class="btn btn-sm btn-outline">Analyze</a></td>
+                <td><a href="static/$1" class="btn btn-sm btn-outline">Analyze</a></td>
             </tr>
             {% endfor %}
             {% endif %}
