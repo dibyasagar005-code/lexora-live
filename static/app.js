@@ -15,8 +15,14 @@ const LexoraApp = {
   usdInrRate: 83.25,
 
   init() {
+    console.log("LexorApp.init() called");
     this.initCurrency();
-    if (typeof LexoraAPI !== "undefined") LexoraAPI.fetchFxRates().then(() => this.updateFxBadge());
+    if (typeof LexoraAPI !== "undefined") {
+      console.log("LexoraAPI is available");
+      LexoraAPI.fetchFxRates().then(() => this.updateFxBadge());
+    } else {
+      console.error("LexoraAPI is not available");
+    }
     const ticker = document.getElementById("tickerContent");
     if (ticker && typeof LexoraAPI !== "undefined") {
       ticker.textContent = LexoraAPI.newsHeadlines().join("  ·  ");
@@ -28,10 +34,14 @@ const LexoraApp = {
     this.initPrediction();
     this.initModal();
     this.renderMarketSkeleton();
+    console.log("Starting market data refresh...");
     this.refreshMarketData().then(() => {
+      console.log("Market data refresh completed");
       if (document.querySelector('.page-view[data-page="prediction"]')) {
         this.activePrediction = "gold";
       }
+    }).catch((error) => {
+      console.error("Market data refresh failed:", error);
     });
     this.startLiveRefresh();
     if (document.getElementById("quickSignals")) this.loadQuickSignals();
