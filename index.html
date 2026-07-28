@@ -314,10 +314,29 @@
     </div>
   </div>
   
+  <script>
+    console.log("LexorA loading...");
+    console.log("Config loading...");
+  </script>
   <script src="static/config.js"></script>
+  <script>
+    console.log("Config loaded:", window.LEXORA_CONFIG);
+  </script>
   <script src="static/api.js"></script>
+  <script>
+    console.log("API loaded:", typeof LexoraAPI);
+  </script>
   <script src="static/charts.js"></script>
   <script src="static/app.js"></script>
+  <script>
+    console.log("App loaded:", typeof LexoraApp);
+    console.log("Initializing app...");
+    if (typeof LexoraApp !== 'undefined') {
+      LexoraApp.init();
+    } else {
+      console.error("LexoraApp not defined");
+    }
+  </script>
   
   <script>
     // Use centralized configuration
