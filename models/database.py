@@ -44,11 +44,16 @@ def init_db():
                 password_hash TEXT,
                 phone TEXT UNIQUE,
                 google_id TEXT UNIQUE,
+                github_id TEXT UNIQUE,
                 is_verified INTEGER DEFAULT 0,
+                verification_token TEXT,
+                verification_token_expiry TIMESTAMP,
                 reset_token TEXT,
                 reset_token_expiry TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP
+                last_login TIMESTAMP,
+                login_count INTEGER DEFAULT 0,
+                last_seen TIMESTAMP
             )
         """)
 
@@ -141,6 +146,78 @@ def init_db():
                 is_read INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # User settings
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                currency TEXT DEFAULT 'INR',
+                theme TEXT DEFAULT 'dark',
+                notifications_enabled INTEGER DEFAULT 1,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id)
+            )
+        """)
+
+        # WebAuthn credentials for biometric authentication
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS webauthn_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                credential_id TEXT UNIQUE NOT NULL,
+                public_key TEXT NOT NULL,
+                sign_count INTEGER DEFAULT 0,
+                device_type TEXT,
+                device_name TEXT,
+                last_used TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Login history for security dashboard
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS login_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                login_method TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                success INTEGER DEFAULT 1,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Active sessions for session management
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_id TEXT UNIQUE NOT NULL,
+                device_info TEXT,
+                ip_address TEXT,
+                last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        # TOTP secrets for Two-Factor Authentication
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS totp_secrets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                secret TEXT UNIQUE NOT NULL,
+                backup_codes TEXT,
+                enabled INTEGER DEFAULT 0,
+                verified INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id)
             )
         """)
 
@@ -255,13 +332,22 @@ def get_user_by_google_id(google_id):
     return dict(row) if row else None
 
 
-def create_user(username, email, password_hash=None, phone=None, google_id=None):
+def get_user_by_github_id(github_id):
+    """Lookup user by GitHub ID."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE github_id = ?", (github_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_user(username, email, password_hash=None, phone=None, google_id=None, github_id=None):
     """Register a new user."""
     with get_db() as conn:
         conn.execute(
-            """INSERT INTO users (username, email, password_hash, phone, google_id)
-               VALUES (?, ?, ?, ?, ?)""",
-            (username, email, password_hash, phone, google_id),
+            """INSERT INTO users (username, email, password_hash, phone, google_id, github_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (username, email, password_hash, phone, google_id, github_id),
         )
 
 
@@ -303,11 +389,58 @@ def verify_user(user_id):
 
 
 def update_last_login(user_id):
-    """Update user's last login timestamp."""
+    """Update user's last login timestamp and increment login count."""
     with get_db() as conn:
         conn.execute(
-            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE users SET last_login = CURRENT_TIMESTAMP, login_count = login_count + 1, last_seen = CURRENT_TIMESTAMP WHERE id = ?",
             (user_id,),
+        )
+
+
+def update_last_seen(user_id):
+    """Update user's last seen timestamp for activity tracking."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = ?",
+            (user_id,),
+        )
+
+
+def get_user_login_count(user_id):
+    """Get user's total login count."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT login_count FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return row['login_count'] if row else 0
+
+
+def create_notification(user_id, message):
+    """Create a notification for a user."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO notifications (user_id, message) VALUES (?, ?)",
+            (user_id, message),
+        )
+
+
+def get_unread_notifications(user_id):
+    """Get unread notifications for a user."""
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT * FROM notifications WHERE user_id = ? AND is_read = 0
+               ORDER BY created_at DESC LIMIT 10""",
+            (user_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_notification_read(notification_id):
+    """Mark a notification as read."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE notifications SET is_read = 1 WHERE id = ?",
+            (notification_id,),
         )
 
 

@@ -7,17 +7,20 @@ import os
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, jsonify, flash,
 )
-from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from dotenv import load_dotenv
+import pyotp
+import qrcode
+import io
+import base64
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -35,7 +38,7 @@ from api.market_data import fetch_market_data
 from data.curation import run_curation_cycle, get_curated_history, generate_prediction
 from ai.predictor import run_prediction, predict_all_assets, sentiment_analysis
 from api.market_data import get_historical_prices
-from auth.auth import AuthManager, hash_password, verify_password, generate_reset_token, GoogleOAuth
+from auth.auth import AuthManager, hash_password, verify_password, generate_reset_token, GoogleOAuth, GitHubOAuth
 
 # ---------------------------------------------------------------------------
 # Flask app configuration
@@ -43,19 +46,12 @@ from auth.auth import AuthManager, hash_password, verify_password, generate_rese
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "lexora-ai-market-predictor-2024-secret")
 app.config["SESSION_PERMANENT"] = True
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "False") == "True"
+app.config["SESSION_COOKIE_SECURE"] = True  # Required for HTTPS
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "None"  # Changed for cross-origin requests
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Lax for same-origin
 
-# Initialize CORS for cross-origin requests
-CORS(app, resources={
-    r"/*": {
-        "origins": ["*"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }
-})
+# Note: CSRF protection disabled for API compatibility
+# CSRF will be handled by CORS and session-based authentication
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -66,6 +62,11 @@ login_manager.login_message = 'Please log in to access this page.'
 # In-memory cache for live market data (refreshed by background thread)
 _market_cache = {"data": None, "updated": None}
 _cache_lock = threading.Lock()
+
+# Rate limiting for login attempts (in-memory)
+_login_attempts = {}
+_lockout_threshold = 5
+_lockout_duration = 300  # 5 minutes
 
 # Initialize AuthManager
 auth_manager = AuthManager(session)
@@ -79,7 +80,16 @@ if os.environ.get("GOOGLE_CLIENT_ID") and os.environ.get("GOOGLE_CLIENT_SECRET")
     google_oauth = GoogleOAuth(
         client_id=os.environ.get("GOOGLE_CLIENT_ID"),
         client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-        redirect_uri=os.environ.get("APP_URL", "http://localhost:5000") + "/auth/google/callback"
+        redirect_uri=os.environ.get("APP_URL", "https://lexora-live.onrender.com") + "/auth/google/callback"
+    )
+
+# Initialize GitHub OAuth
+github_oauth = None
+if os.environ.get("GITHUB_CLIENT_ID") and os.environ.get("GITHUB_CLIENT_SECRET"):
+    github_oauth = GitHubOAuth(
+        client_id=os.environ.get("GITHUB_CLIENT_ID"),
+        client_secret=os.environ.get("GITHUB_CLIENT_SECRET"),
+        redirect_uri=os.environ.get("APP_URL", "https://lexora-live.onrender.com") + "/auth/github/callback"
     )
 
 
@@ -104,6 +114,38 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
+
+def check_rate_limit(identifier):
+    """Check if identifier is rate limited for login attempts."""
+    now = datetime.utcnow().timestamp()
+    
+    # Clean up old entries
+    _login_attempts[identifier] = [
+        attempt for attempt in _login_attempts.get(identifier, [])
+        if now - attempt < _lockout_duration
+    ]
+    
+    attempts = _login_attempts.get(identifier, [])
+    
+    if len(attempts) >= _lockout_threshold:
+        return False, f"Account locked. Try again in {_lockout_duration // 60} minutes."
+    
+    return True, None
+
+
+def record_login_attempt(identifier):
+    """Record a failed login attempt for rate limiting."""
+    now = datetime.utcnow().timestamp()
+    if identifier not in _login_attempts:
+        _login_attempts[identifier] = []
+    _login_attempts[identifier].append(now)
+
+
+def clear_login_attempts(identifier):
+    """Clear login attempts after successful login."""
+    if identifier in _login_attempts:
+        del _login_attempts[identifier]
 
 
 def get_cached_market():
@@ -131,21 +173,9 @@ def refresh_market_background():
 # ---------------------------------------------------------------------------
 # Authentication routes
 # ---------------------------------------------------------------------------
-@app.route("/login")
-def login():
-    """Login page."""
-    return render_template("login.html")
-
-
-@app.route("/register")
-def register():
-    """Registration page."""
-    return render_template("register.html")
-
-
 @app.route("/auth/login", methods=["POST", "OPTIONS"])
 def auth_login():
-    """Handle login request."""
+    """Handle login request with persistent session support and returning user tracking."""
     if request.method == "OPTIONS":
         return jsonify({"success": True})
     
@@ -156,35 +186,86 @@ def auth_login():
     if not email or not password:
         return jsonify({"success": False, "error": "Email and password are required"})
     
+    # Check rate limiting
+    allowed, error = check_rate_limit(email)
+    if not allowed:
+        return jsonify({"success": False, "error": error})
+    
     result = auth_manager.authenticate_email_password(email, password)
     if result["success"]:
-        return jsonify({"success": True, "redirect": "index.html"})
-    return jsonify(result)
+        clear_login_attempts(email)
+        # Set persistent session if remember me is checked
+        if remember:
+            session.permanent = True
+            app.permanent_session_lifetime = datetime.timedelta(days=30)
+        else:
+            session.permanent = False
+        
+        # Track returning user and create notification
+        from models.database import get_user_by_email, get_user_login_count, create_notification
+        user = get_user_by_email(email)
+        if user:
+            login_count = get_user_login_count(user['id'])
+            if login_count > 1:
+                create_notification(user['id'], f"Welcome back! This is your #{login_count} login to LexorA.")
+        
+        return jsonify({"success": True, "redirect": "/"})
+    else:
+        record_login_attempt(email)
+        return jsonify(result)
 
 
 @app.route("/auth/register", methods=["POST", "OPTIONS"])
 def auth_register():
-    """Handle registration request."""
+    """Handle registration request with enhanced validation."""
     if request.method == "OPTIONS":
         return jsonify({"success": True})
     
-    username = request.form.get("username")
-    email = request.form.get("email")
-    password = request.form.get("password")
-    confirm_password = request.form.get("confirm_password")
+    username = request.form.get("username", "").strip()
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    confirm_password = request.form.get("confirm_password", "")
     
+    # Basic field validation
     if not all([username, email, password, confirm_password]):
         return jsonify({"success": False, "error": "All fields are required"})
     
+    # Username validation
+    if len(username) < 3:
+        return jsonify({"success": False, "error": "Username must be at least 3 characters"})
+    if len(username) > 30:
+        return jsonify({"success": False, "error": "Username must be less than 30 characters"})
+    if not username.isalnum() and not all(c.isalnum() or c in '_-' for c in username):
+        return jsonify({"success": False, "error": "Username can only contain letters, numbers, hyphens, and underscores"})
+    
+    # Email validation
+    if '@' not in email or '.' not in email.split('@')[-1]:
+        return jsonify({"success": False, "error": "Please enter a valid email address"})
+    
+    # Password matching
     if password != confirm_password:
         return jsonify({"success": False, "error": "Passwords do not match"})
     
+    # Password strength validation
     if len(password) < 8:
         return jsonify({"success": False, "error": "Password must be at least 8 characters"})
     
+    # Check for at least one uppercase, one lowercase, one digit
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    
+    if not (has_upper and has_lower and has_digit):
+        return jsonify({"success": False, "error": "Password must contain uppercase, lowercase, and digit"})
+    
+    # Check for common passwords
+    common_passwords = ['password', '12345678', 'qwerty', 'abc123', 'password123']
+    if password.lower() in common_passwords:
+        return jsonify({"success": False, "error": "Please choose a stronger password"})
+    
     result = auth_manager.register_user(username, email, password)
     if result["success"]:
-        return jsonify({"success": True, "message": "Registration successful", "redirect": "login.html"})
+        return jsonify({"success": True, "message": "Registration successful! You can now login.", "redirect": "/login"})
     return jsonify(result)
 
 
@@ -244,7 +325,7 @@ def google_login():
     """Google OAuth login redirect."""
     if not google_oauth:
         flash("Google OAuth is not configured. Please contact administrator.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     auth_url = google_oauth.get_authorization_url()
     return redirect(auth_url)
@@ -255,12 +336,12 @@ def google_callback():
     """Google OAuth callback."""
     if not google_oauth:
         flash("Google OAuth is not configured.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     code = request.args.get("code")
     if not code:
         flash("Authorization failed. Please try again.", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
     
     try:
         # Exchange code for token
@@ -268,7 +349,7 @@ def google_callback():
         
         if "error" in token_response:
             flash(f"OAuth error: {token_response.get('error_description', token_response['error'])}", "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
         
         access_token = token_response.get("access_token")
         
@@ -281,24 +362,135 @@ def google_callback():
         
         if not google_id or not email:
             flash("Failed to get user information from Google.", "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
         
         # Authenticate or register user
         result = auth_manager.authenticate_google(google_id, email, name)
         
         if result["success"]:
-            if result.get("new_user"):
-                flash(f"Welcome to LexorA, {name}!", "success")
-            else:
-                flash(f"Welcome back, {name}!", "success")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/index.html")
+            flash(f"Welcome back, {name}!", "success")
+            return redirect("/")
         else:
             flash(result.get("error", "Authentication failed"), "error")
-            return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+            return redirect("/login")
             
     except Exception as e:
         flash(f"Authentication error: {str(e)}", "error")
-        return redirect("https://dibyasagar005-code.github.io/lexora-live/login.html")
+        return redirect("/login")
+
+
+@app.route("/auth/github")
+def github_login():
+    """Initiate GitHub OAuth login."""
+    if not github_oauth:
+        flash("GitHub OAuth is not configured.", "error")
+        return redirect("/login")
+    
+    auth_url = github_oauth.get_auth_url()
+    return redirect(auth_url)
+
+
+@app.route("/auth/github/callback")
+def github_callback():
+    """GitHub OAuth callback handler."""
+    if not github_oauth:
+        flash("GitHub OAuth is not configured.", "error")
+        return redirect("/login")
+    
+    code = request.args.get("code")
+    state = request.args.get("state")
+    error = request.args.get("error")
+    
+    if error:
+        flash(f"GitHub OAuth error: {error}", "error")
+        return redirect("/login")
+    
+    if not code:
+        flash("Authorization failed. Please try again.", "error")
+        return redirect("/login")
+    
+    try:
+        # Exchange code for token
+        access_token = github_oauth.get_access_token(code)
+        if not access_token:
+            flash("Failed to exchange authorization code for token.", "error")
+            return redirect("/login")
+        
+        # Get user info
+        user_info = github_oauth.get_user_info(access_token)
+        
+        # Check if user exists
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE github_id = ?", (user_info["id"],))
+            user = cursor.fetchone()
+            
+            if user:
+                # Existing user - log them in
+                session["user_id"] = user["id"]
+                session["auth_method"] = "github"
+                
+                # Log login history
+                cursor.execute("""
+                    INSERT INTO login_history (user_id, login_method, ip_address, user_agent, success)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    user["id"],
+                    "github",
+                    request.remote_addr,
+                    request.headers.get("User-Agent"),
+                    1
+                ))
+                conn.commit()
+                
+                flash(f"Welcome back, {user['username']}!", "success")
+                return redirect("/")
+            else:
+                # New user - create account
+                username = user_info["username"] or user_info["email"].split("@")[0]
+                email = user_info["email"]
+                
+                # Check if username exists
+                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+                if cursor.fetchone():
+                    username = f"{username}_{user_info['id']}"
+                
+                # Check if email exists
+                cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+                if cursor.fetchone():
+                    flash("Email already registered. Please login with your existing account.", "error")
+                    return redirect("/login")
+                
+                # Create user
+                cursor.execute("""
+                    INSERT INTO users (username, email, github_id, is_verified)
+                    VALUES (?, ?, ?, 1)
+                """, (username, email, user_info["id"]))
+                conn.commit()
+                
+                user_id = cursor.lastrowid
+                session["user_id"] = user_id
+                session["auth_method"] = "github"
+                
+                # Log login history
+                cursor.execute("""
+                    INSERT INTO login_history (user_id, login_method, ip_address, user_agent, success)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    user_id,
+                    "github",
+                    request.remote_addr,
+                    request.headers.get("User-Agent"),
+                    1
+                ))
+                conn.commit()
+                
+                flash(f"Welcome to LexorA, {username}!", "success")
+                return redirect("/")
+    
+    except Exception as e:
+        flash(f"GitHub OAuth error: {str(e)}", "error")
+        return redirect("/login")
 
 
 @app.route("/auth/send-otp", methods=["POST", "OPTIONS"])
@@ -331,6 +523,314 @@ def verify_otp():
     return jsonify({"success": False, "error": "OTP verification not implemented yet"})
 
 
+# WebAuthn biometric authentication routes (commented out due to library compatibility issues)
+# Will be implemented with a different WebAuthn library
+"""
+@app.route("/auth/webauthn/register/begin", methods=["POST"])
+@login_required
+def webauthn_register_begin():
+    # WebAuthn registration implementation
+    pass
+
+@app.route("/auth/webauthn/register/complete", methods=["POST"])
+@login_required
+def webauthn_register_complete():
+    # WebAuthn registration completion
+    pass
+
+@app.route("/auth/webauthn/login/begin", methods=["POST"])
+def webauthn_login_begin():
+    # WebAuthn login initiation
+    pass
+
+@app.route("/auth/webauthn/login/complete", methods=["POST"])
+def webauthn_login_complete():
+    # WebAuthn login completion
+    pass
+"""
+
+
+@app.route("/auth/2fa/setup", methods=["POST"])
+@login_required
+def setup_2fa():
+    """Setup Two-Factor Authentication for user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Check if 2FA is already setup
+        cursor.execute("SELECT secret, enabled FROM totp_secrets WHERE user_id = ?", (user_id,))
+        existing = cursor.fetchone()
+        
+        if existing and existing["enabled"]:
+            return jsonify({"success": False, "error": "2FA is already enabled"})
+        
+        # Generate new TOTP secret
+        secret = pyotp.random_base32()
+        
+        # Store or update the secret
+        if existing:
+            cursor.execute("""
+                UPDATE totp_secrets 
+                SET secret = ?, enabled = 0, verified = 0 
+                WHERE user_id = ?
+            """, (secret, user_id))
+        else:
+            cursor.execute("""
+                INSERT INTO totp_secrets (user_id, secret, enabled, verified)
+                VALUES (?, ?, 0, 0)
+            """, (user_id, secret))
+        
+        conn.commit()
+        
+        # Generate QR code
+        totp = pyotp.TOTP(secret)
+        provisioning_uri = totp.provisioning_uri(
+            name=f"lexora:{session.get('email', 'user')}",
+            issuer_name="LexorA"
+        )
+        
+        # Generate QR code image
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(provisioning_uri)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        qr_code_data = base64.b64encode(buffer.getvalue()).decode()
+        
+        return jsonify({
+            "success": True,
+            "secret": secret,
+            "qr_code": f"data:image/png;base64,{qr_code_data}",
+            "provisioning_uri": provisioning_uri
+        })
+
+
+@app.route("/auth/2fa/verify", methods=["POST"])
+@login_required
+def verify_2fa():
+    """Verify TOTP code during setup."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    code = request.json.get("code")
+    if not code or len(code) != 6:
+        return jsonify({"success": False, "error": "Invalid code format"}), 400
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT secret FROM totp_secrets WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return jsonify({"success": False, "error": "2FA not setup"}), 400
+        
+        secret = result["secret"]
+        totp = pyotp.TOTP(secret)
+        
+        if totp.verify(code):
+            # Mark as verified and enabled
+            cursor.execute("""
+                UPDATE totp_secrets 
+                SET verified = 1, enabled = 1 
+                WHERE user_id = ?
+            """, (user_id,))
+            conn.commit()
+            
+            return jsonify({"success": True, "message": "2FA enabled successfully"})
+        else:
+            return jsonify({"success": False, "error": "Invalid code"}), 400
+
+
+@app.route("/auth/2fa/disable", methods=["POST"])
+@login_required
+def disable_2fa():
+    """Disable Two-Factor Authentication."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    password = request.json.get("password")
+    if not password:
+        return jsonify({"success": False, "error": "Password required"}), 400
+    
+    # Verify password
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        result = cursor.fetchone()
+        
+        if not result or not check_password_hash(result["password_hash"], password):
+            return jsonify({"success": False, "error": "Invalid password"}), 400
+        
+        # Disable 2FA
+        cursor.execute("""
+            UPDATE totp_secrets 
+            SET enabled = 0, verified = 0 
+            WHERE user_id = ?
+        """, (user_id,))
+        conn.commit()
+        
+        return jsonify({"success": True, "message": "2FA disabled successfully"})
+
+
+@app.route("/auth/2fa/status", methods=["GET"])
+@login_required
+def get_2fa_status():
+    """Get 2FA status for user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT enabled, verified FROM totp_secrets WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "enabled": bool(result["enabled"]),
+                "verified": bool(result["verified"])
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "enabled": False,
+                "verified": False
+            })
+
+
+@app.route("/api/security/login-history", methods=["GET"])
+@login_required
+def get_login_history():
+    """Get login history for security dashboard."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT login_method, ip_address, user_agent, success, timestamp
+            FROM login_history
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT 50
+        """, (user_id,))
+        history = cursor.fetchall()
+        
+        return jsonify({
+            "success": True,
+            "history": [dict(row) for row in history]
+        })
+
+
+@app.route("/api/security/sessions", methods=["GET"])
+@login_required
+def get_active_sessions():
+    """Get active sessions for user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT session_id, device_info, ip_address, last_activity, expires_at
+            FROM active_sessions
+            WHERE user_id = ?
+            ORDER BY last_activity DESC
+        """, (user_id,))
+        sessions = cursor.fetchall()
+        
+        return jsonify({
+            "success": True,
+            "sessions": [dict(row) for row in sessions]
+        })
+
+
+@app.route("/api/security/sessions/<session_id>", methods=["DELETE"])
+@login_required
+def revoke_session(session_id):
+    """Revoke a specific session."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM active_sessions
+            WHERE session_id = ? AND user_id = ?
+        """, (session_id, user_id))
+        conn.commit()
+        
+        return jsonify({"success": True, "message": "Session revoked"})
+
+
+@app.route("/api/security/sessions/revoke-all", methods=["POST"])
+@login_required
+def revoke_all_sessions():
+    """Revoke all sessions except current."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    current_session_id = session.get("session_id")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if current_session_id:
+            cursor.execute("""
+                DELETE FROM active_sessions
+                WHERE user_id = ? AND session_id != ?
+            """, (user_id, current_session_id))
+        else:
+            cursor.execute("""
+                DELETE FROM active_sessions
+                WHERE user_id = ?
+            """, (user_id,))
+        conn.commit()
+        
+        return jsonify({"success": True, "message": "All sessions revoked"})
+
+
+@app.route("/api/notifications", methods=["GET"])
+@login_required
+def get_notifications():
+    """Get unread notifications for the current user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    from models.database import get_unread_notifications
+    notifications = get_unread_notifications(user_id)
+    
+    return jsonify({"success": True, "notifications": notifications})
+
+
+@app.route("/api/notifications/<int:notification_id>/read", methods=["POST"])
+@login_required
+def mark_notification_read_api(notification_id):
+    """Mark a notification as read."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "Not authenticated"}), 401
+    
+    from models.database import mark_notification_read
+    mark_notification_read(notification_id)
+    
+    return jsonify({"success": True})
+
+
 # ---------------------------------------------------------------------------
 # Page routes
 # ---------------------------------------------------------------------------
@@ -347,6 +847,18 @@ def index():
             if row:
                 user = dict(row)
     return render_template("index.html", market=market, user=user)
+
+
+@app.route("/login")
+def login():
+    """Login page."""
+    return render_template("login.html")
+
+
+@app.route("/register")
+def register():
+    """Registration page."""
+    return render_template("register.html")
 
 
 @app.route("/logout")

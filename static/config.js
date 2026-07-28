@@ -3,13 +3,11 @@
  * Centralized configuration for API URLs and app settings
  */
 
-// Backend API URL - Change this based on environment
-// Local development: 'http://127.0.0.1:5000'
-// Production: 'https://lexora-live.onrender.com'
-const BACKEND_URL = 'http://127.0.0.1:5000';
+// Backend API URL - Use relative path for same-origin
+const BACKEND_URL = '';  // Empty string for same-origin requests
 
-// Frontend URL (for OAuth redirects)
-const FRONTEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
+// Frontend URL (for OAuth redirects) - Use same origin
+const FRONTEND_URL = window.location.origin;
 
 // App configuration
 const CONFIG = {

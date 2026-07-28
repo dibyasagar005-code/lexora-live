@@ -147,6 +147,7 @@ const LexoraApp = {
       this.updateMarketCards(this.market);
       this.updateLastRefresh();
       this.tickRefreshLabel();
+      
       const src = document.getElementById("dataSource");
       const liveN =
         this.market.liveCount ??
@@ -161,7 +162,11 @@ const LexoraApp = {
               ? `● LIVE (${liveN}/${total})`
               : `● ESTIMATE (${total} assets)`;
       }
-      if (this.currentPage === "markets") this.renderMarketsTable();
+      
+      if (this.currentPage === "markets") {
+        this.renderMarketsTable();
+        if (this.market) LexoraCharts.initLivePriceChart("livePriceChart", this.market);
+      }
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       if (this.currentPage === "prediction") this.loadPrediction(this.activePrediction);
       LexoraCharts.refreshAll(this.market);
@@ -169,22 +174,19 @@ const LexoraApp = {
         this.loadQuickSignals();
         this.loadMarketSignals();
       }, 0);
-    } catch (e) {
-      if (pulse) pulse.textContent = "Data unavailable - using estimates";
-      console.error("Market refresh error:", e);
+    } catch (error) {
+      console.error("[LexorA] Market refresh error:", error);
+      const pulse = document.querySelector(".pulse-text");
+      if (pulse) pulse.textContent = "Using cached data";
       if (!this.market?.assets) {
         this.market = LexoraAPI.finalizeMarket({});
-        this.updateMarketCards(this.market);
-        this.updateLastRefresh();
-        const src = document.getElementById("dataSource");
-        if (src) src.textContent = "OFFLINE · Estimates · 30s";
       }
     } finally {
-      if (grid) grid.classList.remove("market-loading");
       this._marketRefreshInFlight = false;
+      if (grid) grid.classList.remove("market-loading");
       if (this._pendingForceRefresh) {
         this._pendingForceRefresh = false;
-        this.refreshMarketData(true);
+        setTimeout(() => this.refreshMarketData(true), 100);
       }
     }
   },

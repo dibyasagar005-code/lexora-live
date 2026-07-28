@@ -67,6 +67,68 @@ def is_reset_token_valid(user, token: str) -> bool:
     return datetime.utcnow() < expiry
 
 
+class GitHubOAuth:
+    """GitHub OAuth 2.0 authentication handler."""
+    
+    def __init__(self, client_id, client_secret, redirect_uri):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+        self.auth_url = "https://github.com/login/oauth/authorize"
+        self.token_url = "https://github.com/login/oauth/access_token"
+        self.user_url = "https://api.github.com/user"
+        self.user_email_url = "https://api.github.com/user/emails"
+    
+    def get_auth_url(self, state=None):
+        """Generate GitHub OAuth authorization URL."""
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scope": "user:email",
+            "state": state or os.urandom(16).hex()
+        }
+        return f"{self.auth_url}?{urllib.parse.urlencode(params)}"
+    
+    def get_access_token(self, code):
+        """Exchange authorization code for access token."""
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "redirect_uri": self.redirect_uri
+        }
+        headers = {"Accept": "application/json"}
+        
+        response = requests.post(self.token_url, data=data, headers=headers)
+        response.raise_for_status()
+        return response.json().get("access_token")
+    
+    def get_user_info(self, access_token):
+        """Get user information from GitHub."""
+        headers = {"Authorization": f"token {access_token}"}
+        
+        # Get basic user info
+        user_response = requests.get(self.user_url, headers=headers)
+        user_response.raise_for_status()
+        user_data = user_response.json()
+        
+        # Get user email
+        email_response = requests.get(self.user_email_url, headers=headers)
+        email_response.raise_for_status()
+        emails = email_response.json()
+        
+        # Find primary email
+        primary_email = next((e["email"] for e in emails if e["primary"] and e["verified"]), None)
+        
+        return {
+            "id": str(user_data.get("id")),
+            "username": user_data.get("login"),
+            "email": primary_email or user_data.get("email"),
+            "name": user_data.get("name") or user_data.get("login"),
+            "avatar_url": user_data.get("avatar_url")
+        }
+
+
 class GoogleOAuth:
     """Google OAuth 2.0 handler."""
     

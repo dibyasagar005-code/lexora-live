@@ -35,6 +35,34 @@ body {
     overflow-x: hidden;
 }
 
+/* Install App Button */
+.install-app-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 20px;
+  margin: 16px 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--cyan), var(--gold));
+  color: var(--bg-dark);
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--glow);
+}
+
+.install-app-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.5);
+}
+
+.install-app-btn:active {
+  transform: translateY(0);
+}
+
 /* News ticker */
 .news-ticker {
     background: linear-gradient(90deg, rgba(0,240,255,0.1), rgba(255,215,0,0.1));
@@ -873,6 +901,10 @@ body.menu-open { overflow: hidden; }
     .market-grid { grid-template-columns: 1fr 1fr; }
     .page-header h2 { font-size: 1.35rem; }
     .tagline { max-width: 100%; font-size: 8px; }
+    /* Auth pages mobile optimization */
+    .auth-card { padding: 24px 20px; }
+    .auth-header h2 { font-size: 24px; }
+    .auth-header .logo-icon { font-size: 40px; }
 }
 @media (max-width: 480px) {
     .market-grid { grid-template-columns: 1fr; }
@@ -881,4 +913,7 @@ body.menu-open { overflow: hidden; }
     .news-ticker { padding: 6px 10px; }
     .ticker-content { font-size: 11px; }
     .card-price-main { font-size: 1.25rem; }
+    /* Additional mobile optimizations */
+    .btn-google, .btn-github, .btn-primary { font-size: 14px; padding: 12px 16px; }
+    .form-group input { font-size: 14px; padding: 12px 14px; }
 }

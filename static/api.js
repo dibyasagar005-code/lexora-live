@@ -17,14 +17,14 @@ const LexoraAPI = {
   TIMEOUT: 8000,
   FETCH_TIMEOUT: 6000,
   TROY_OZ_GRAMS: 31.1034768,
-  METALS: ["gold", "silver", "platinum", "palladium", "rhodium"],
-  METAL_LB: ["copper", "aluminum", "nickel", "zinc", "lead"],
+  METALS: ["gold", "silver", "platinum", "palladium", "rhodium", "cobalt", "lithium"],
+  METAL_LB: ["copper", "aluminum", "nickel", "zinc", "lead", "tin", "magnesium", "manganese", "chromium"],
   /** Reject bad API values (e.g. copper $/lb mistaken as gold $/oz) */
   PRICE_RANGES: {
     // Precious Metals
-    gold: [1500, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000], rhodium: [1000, 15000],
+    gold: [1500, 8000], silver: [12, 150], platinum: [700, 4000], palladium: [800, 6000], rhodium: [1000, 15000], cobalt: [15, 50], lithium: [10, 80],
     // Industrial Metals
-    copper: [2, 15], aluminum: [1500, 3500], nickel: [10000, 35000], zinc: [2000, 5000], lead: [1500, 3500],
+    copper: [2, 15], aluminum: [1500, 3500], nickel: [10000, 35000], zinc: [2000, 5000], lead: [1500, 3500], tin: [25000, 45000], magnesium: [2000, 4000], manganese: [1500, 3500], chromium: [8000, 15000],
     // Cryptocurrencies
     bitcoin: [10000, 250000], ethereum: [500, 25000], ripple: [0.2, 5], cardano: [0.2, 5],
     solana: [10, 300], dogecoin: [0.05, 2], polkadot: [3, 60], avalanche: [10, 200], chainlink: [5, 50],
@@ -41,9 +41,9 @@ const LexoraAPI = {
   },
   FALLBACK: {
     // Precious Metals
-    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, rhodium: 4500,
+    gold: 3340, silver: 31.2, platinum: 1020, palladium: 980, rhodium: 4500, cobalt: 28, lithium: 35,
     // Industrial Metals
-    copper: 4.25, aluminum: 2400, nickel: 18000, zinc: 3200, lead: 2200,
+    copper: 4.25, aluminum: 2400, nickel: 18000, zinc: 3200, lead: 2200, tin: 32000, magnesium: 2800, manganese: 2400, chromium: 11000,
     // Cryptocurrencies
     bitcoin: 97000, ethereum: 3600, ripple: 0.55, cardano: 0.45, solana: 145,
     dogecoin: 0.15, polkadot: 7.5, avalanche: 35, chainlink: 14,
@@ -59,9 +59,9 @@ const LexoraAPI = {
   },
   LABELS: {
     // Precious Metals
-    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", rhodium: "Rhodium",
+    gold: "Gold", silver: "Silver", platinum: "Platinum", palladium: "Palladium", rhodium: "Rhodium", cobalt: "Cobalt", lithium: "Lithium",
     // Industrial Metals
-    copper: "Copper", aluminum: "Aluminum", nickel: "Nickel", zinc: "Zinc", lead: "Lead",
+    copper: "Copper", aluminum: "Aluminum", nickel: "Nickel", zinc: "Zinc", lead: "Lead", tin: "Tin", magnesium: "Magnesium", manganese: "Manganese", chromium: "Chromium",
     // Cryptocurrencies
     bitcoin: "Bitcoin", ethereum: "Ethereum", ripple: "Ripple", cardano: "Cardano",
     solana: "Solana", dogecoin: "Dogecoin", polkadot: "Polkadot", avalanche: "Avalanche", chainlink: "Chainlink",
@@ -101,9 +101,17 @@ const LexoraAPI = {
     platinum: ["XPTUSD=X", "PL=F"],
     palladium: ["XPDUSD=X", "PA=F"],
     rhodium: ["XAU=X"],
+    cobalt: ["COBALT"],
+    lithium: ["LITHIUM"],
     copper: ["HG=F"],
     aluminum: ["ALI=F"],
     nickel: ["LME:NSI"],
+    zinc: ["ZINC"],
+    lead: ["LEAD"],
+    tin: ["TIN"],
+    magnesium: ["MAGNESIUM"],
+    manganese: ["MANGANESE"],
+    chromium: ["CHROMIUM"],
     natural_gas: ["NG=F"],
     wheat: ["ZW=F"],
     corn: ["ZC=F"],
@@ -175,10 +183,12 @@ const LexoraAPI = {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), this.TIMEOUT);
     try {
+      const headers = { Accept: "application/json" };
+      
       const r = await fetch(url, {
         signal: ctrl.signal,
         cache: "no-store",
-        headers: { Accept: "application/json" },
+        headers: headers,
       });
       if (!r.ok) throw new Error(String(r.status));
       const text = await r.text();
