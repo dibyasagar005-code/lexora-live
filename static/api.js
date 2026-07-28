@@ -406,8 +406,8 @@ const LexoraAPI = {
     await Promise.all(
       Object.entries(pairs).map(async ([key, sym]) => {
         try {
-          const d = await this.fetchJson(
-            this.cacheBust(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`)
+          const d = await this.fetchWithProxies(
+            `https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`
           );
           const p = Number(d.lastPrice);
           if (this.isValidPrice(key, p)) {
@@ -476,13 +476,9 @@ const LexoraAPI = {
       "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,solana,dogecoin,polkadot,avalanche,chainlink&vs_currencies=usd&include_24hr_change=true";
     let data = {};
     try {
-      data = await this.fetchJson(this.cacheBust(path));
-    } catch (e) {
-      try {
-        data = await this.fetchWithProxies(path);
-      } catch (e2) {
-        data = {};
-      }
+      data = await this.fetchWithProxies(path);
+    } catch (e2) {
+      data = {};
     }
     const out = { ...binance };
     const coinMap = {
@@ -564,7 +560,7 @@ const LexoraAPI = {
     ];
     for (const url of urls) {
       try {
-        const data = await this.fetchJson(this.cacheBust(url));
+        const data = await this.fetchWithProxies(url);
         const r = data.rates || {};
         if (r.INR) {
           return {
@@ -586,8 +582,8 @@ const LexoraAPI = {
     const out = {};
     try {
       const [gold, silver] = await Promise.all([
-        this.fetchJson(this.cacheBust("https://ibja-api.vercel.app/latest")),
-        this.fetchJson(this.cacheBust("https://ibja-api.vercel.app/silver/latest")),
+        this.fetchWithProxies("https://ibja-api.vercel.app/latest"),
+        this.fetchWithProxies("https://ibja-api.vercel.app/silver/latest"),
       ]);
 
       const g10 = Number(gold?.lblGold999_AM || gold?.lblGold999_PM);
@@ -639,7 +635,7 @@ const LexoraAPI = {
   async fetchMintedMetal() {
     const out = {};
     try {
-      const data = await this.fetchJson(this.cacheBust("https://mintedmetal.com/api/prices.json"));
+      const data = await this.fetchWithProxies("https://mintedmetal.com/api/prices.json");
       const keys = ["gold", "silver", "platinum", "palladium"];
       keys.forEach((key) => {
         const m = data?.metals?.[key];
