@@ -137,7 +137,7 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Use Flask backend for Render deployment
+    // Static GitHub Pages deployment - no Flask backend
     return false;
   },
 

@@ -328,8 +328,15 @@ const LexoraApp = {
 
   async loadMarketSignals() {
     try {
-      const data = await LexoraAPI.predictAll(this.market);
-      Object.entries(data).forEach(([sym, p]) => {
+      // Use client-side AI for signals
+      const signals = {};
+      if (this.market?.assets) {
+        for (const [sym, asset] of Object.entries(this.market.assets)) {
+          const p = await LexoraAI.predict(sym, asset.price);
+          signals[sym] = { signal: p.signal };
+        }
+      }
+      Object.entries(signals).forEach(([sym, p]) => {
         const b = document.querySelector(`[data-signal="${sym}"]`);
         if (b) { b.textContent = p.signal; b.className = `signal-badge signal-${p.signal.toLowerCase()}`; }
       });
@@ -376,45 +383,53 @@ const LexoraApp = {
     box.innerHTML = '<p class="loading-spinner">Fetching live price & AI analysis…</p>';
     if (!this.market?.assets) await this.refreshMarketData(true);
     const refreshLive = this.refreshAssetInstant(symbol);
-    const runAi = LexoraAPI.predict(symbol, this.market);
     await refreshLive;
     const liveAsset = this.market?.assets?.[symbol];
     const liveLine = liveAsset
       ? LexoraAPI.priceDisplay(symbol, liveAsset, this.currency)
       : { primary: "—", secondary: "" };
-    const p = await runAi;
+    
+    // Use client-side AI prediction
+    const currentPrice = liveAsset?.price || 0;
+    const p = await LexoraAI.predict(symbol, currentPrice);
+    
     const updated = liveAsset?.updated
       ? new Date(liveAsset.updated).toLocaleTimeString()
       : "just now";
     const spotBadge = liveAsset?.live !== false ? "LIVE" : "ESTIMATE";
     box.innerHTML = `
       <p class="pred-live-strip">● ${spotBadge} spot <strong>${liveLine.primary}</strong> <span>${liveLine.secondary}</span> · ${updated}</p>
-      <p class="pred-reason">${p.recommendation_reason || ""}</p>
+      <p class="pred-reason">${p.recommendation}</p>
       <div class="prediction-hero glass">
         <div class="pred-main">
           <h3>${LexoraAPI.label(symbol)}</h3>
           <div class="current-price">${liveLine.primary}</div>
           <div class="price-sub-cell">${liveLine.secondary || ""}</div>
-          <div class="signal-large signal-${p.signal.toLowerCase()}">${p.signal}</div>
+          <div class="signal-large signal-${p.signal.toLowerCase()}">${p.signal.replace('_', ' ').toUpperCase()}</div>
           <div class="confidence-bar"><div class="confidence-fill" style="width:${p.confidence}%"></div></div>
           <span class="confidence-text">${p.confidence}% Confidence · ${p.recommendation}</span>
         </div>
         <div class="pred-metrics">
-          <div class="metric"><label>Expected (USD)</label><span>${LexoraAPI.formatUsdSpot(p.expected_price)}</span></div>
-          <div class="metric"><label>Trend</label><span class="trend-${p.trend}">${p.trend}</span></div>
-          <div class="metric"><label>RSI</label><span>${p.rsi}</span></div>
-          <div class="metric"><label>Volatility</label><span>${p.volatility}%</span></div>
-          <div class="metric"><label>Sentiment</label><span>${p.sentiment?.label || "—"}</span></div>
-          <div class="metric"><label>Action</label><span class="rec-${p.recommendation.toLowerCase()}">${p.recommendation}</span></div>
+          <div class="metric"><label>Expected (USD)</label><span>${p.forecast.price7d}</span></div>
+          <div class="metric"><label>Trend</label><span class="trend-${p.indicators.trend}">${p.indicators.trend.toUpperCase()}</span></div>
+          <div class="metric"><label>RSI</label><span>${p.indicators.rsi}</span></div>
+          <div class="metric"><label>Volatility</label><span>${p.indicators.volatility}</span></div>
+          <div class="metric"><label>Support</label><span>${p.levels.support}</span></div>
+          <div class="metric"><label>Resistance</label><span>${p.levels.resistance}</span></div>
         </div>
       </div>
-      <div class="risk-meter-wrap glass"><h4>Risk ${p.risk_level}%</h4><div class="risk-meter"><div class="risk-fill" style="width:${p.risk_level}%"></div></div></div>
+      <div class="risk-meter-wrap glass"><h4>Risk ${(100 - p.confidence)}%</h4><div class="risk-meter"><div class="risk-fill" style="width:${100 - p.confidence}%"></div></div></div>
       <div class="chart-row">
         <div class="chart-card glass"><h4>History</h4><canvas id="historyChart"></canvas></div>
         <div class="chart-card glass"><h4>Forecast</h4><canvas id="forecastChart"></canvas></div>
       </div>`;
-    LexoraCharts.initHistoryChart("historyChart", p.historical);
-    LexoraCharts.initForecastChart("forecastChart", p.historical, p.forecast);
+    
+    // Generate historical data for charts
+    const historical = LexoraAI.generateHistoricalPrices(currentPrice, 30);
+    const forecast = [currentPrice, parseFloat(p.forecast.price7d)];
+    
+    LexoraCharts.initHistoryChart("historyChart", historical);
+    LexoraCharts.initForecastChart("forecastChart", forecast);
   },
 
   initCurrency() {
