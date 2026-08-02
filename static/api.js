@@ -137,8 +137,8 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Use static API for GitHub Pages deployment
-    return false;
+    // Use Flask backend for local development with live data
+    return true;
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
@@ -231,10 +231,9 @@ const LexoraAPI = {
 
   async fetchWithProxies(path) {
     const urls = [
+      this.cacheBust(path),
       this.cacheBust("https://api.allorigins.win/raw?url=" + encodeURIComponent(path)),
       this.cacheBust("https://corsproxy.io/?" + encodeURIComponent(path)),
-      this.cacheBust("https://cors-anywhere.herokuapp.com/" + path),
-      this.cacheBust(path),
     ];
     let lastErr;
     for (const url of urls) {
@@ -408,9 +407,9 @@ const LexoraAPI = {
     await Promise.all(
       Object.entries(pairs).map(async ([key, sym]) => {
         try {
-          // Try with proxy first for GitHub Pages
-          const d = await this.fetchWithProxies(
-            `https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`
+          // Try direct API first (Binance supports CORS)
+          const d = await this.fetchJson(
+            this.cacheBust(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`)
           );
           const p = Number(d.lastPrice);
           if (this.isValidPrice(key, p)) {
@@ -418,11 +417,28 @@ const LexoraAPI = {
               price: p,
               change: Number(d.priceChangePercent) || 0,
               unit: "unit",
-              source: "binance-proxy",
+              source: "binance",
             };
           }
         } catch (e) {
-          console.warn("[LexorA] binance proxy failed", sym, e.message);
+          console.warn("[LexorA] binance direct failed", sym, e.message);
+          // Try with proxy as fallback
+          try {
+            const d = await this.fetchWithProxies(
+              `https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`
+            );
+            const p = Number(d.lastPrice);
+            if (this.isValidPrice(key, p)) {
+              out[key] = {
+                price: p,
+                change: Number(d.priceChangePercent) || 0,
+                unit: "unit",
+                source: "binance-proxy",
+              };
+            }
+          } catch (e2) {
+            console.warn("[LexorA] binance proxy failed", sym, e2.message);
+          }
         }
       })
     );
@@ -479,10 +495,13 @@ const LexoraAPI = {
       "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,solana,dogecoin,polkadot,avalanche,chainlink&vs_currencies=usd&include_24hr_change=true";
     let data = {};
     try {
-      data = await this.fetchWithProxies(path);
-    } catch (e2) {
-      console.warn("[LexorA] coingecko proxy failed", e2.message);
-      data = {};
+      data = await this.fetchJson(this.cacheBust(path));
+    } catch (e) {
+      try {
+        data = await this.fetchWithProxies(path);
+      } catch (e2) {
+        data = {};
+      }
     }
     const out = { ...binance };
     const coinMap = {
@@ -496,7 +515,7 @@ const LexoraAPI = {
           price: data[coinId].usd,
           change: data[coinId].usd_24h_change || 0,
           unit: "unit",
-          source: "coingecko-proxy",
+          source: "coingecko",
         };
       }
     });
@@ -564,19 +583,34 @@ const LexoraAPI = {
     ];
     for (const url of urls) {
       try {
-        // Try with proxy first for GitHub Pages
-        const data = await this.fetchWithProxies(url);
+        // Try direct API first (Frankfurter supports CORS)
+        const data = await this.fetchJson(this.cacheBust(url));
         const r = data.rates || {};
         if (r.INR) {
           return {
             usd_inr: Number(r.INR),
             eur_usd: r.EUR ? 1 / Number(r.EUR) : null,
             gbp_usd: r.GBP ? 1 / Number(r.GBP) : null,
-            source: "live-fx-proxy",
+            source: "live-fx",
           };
         }
       } catch (e) {
-        console.warn("[LexorA] forex proxy failed", e.message);
+        console.warn("[LexorA] forex direct failed", e.message);
+        // Try with proxy as fallback
+        try {
+          const data = await this.fetchWithProxies(url);
+          const r = data.rates || {};
+          if (r.INR) {
+            return {
+              usd_inr: Number(r.INR),
+              eur_usd: r.EUR ? 1 / Number(r.EUR) : null,
+              gbp_usd: r.GBP ? 1 / Number(r.GBP) : null,
+              source: "live-fx-proxy",
+            };
+          }
+        } catch (e2) {
+          console.warn("[LexorA] forex proxy failed", e2.message);
+        }
       }
     }
     return {};
