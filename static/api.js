@@ -334,17 +334,8 @@ const LexoraAPI = {
       const hit = await this.fetchYahooSymbol(sym, key, fresh);
       if (hit) return hit;
     }
-    // Fallback to synthetic data if Yahoo fails
-    console.warn("[LexorA] Yahoo failed for", key, "using fallback");
-    const fallbackPrice = this.FALLBACK[key];
-    if (fallbackPrice && this.isValidPrice(key, fallbackPrice)) {
-      return {
-        price: fallbackPrice,
-        change: (Math.random() - 0.5) * 2, // Small random change
-        unit: this.assetUnit(key),
-        source: "fallback-yahoo-failed",
-      };
-    }
+    // No fallback - return null if Yahoo fails
+    console.warn("[LexorA] Yahoo failed for", key, "no data available");
     return null;
   },
 
