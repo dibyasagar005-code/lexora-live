@@ -112,6 +112,9 @@ const LexoraAPI = {
   _apiHealth: new Map(),
   _requestQueue: [],
   _isProcessingQueue: false,
+  _activeRequests: new Map(), // Track active requests for cancellation
+  _pendingFetches: new Map(), // Prevent duplicate fetches
+  _refreshInterval: null, // Track refresh interval for cleanup
 
   loadSessionBase() {
     try {
@@ -199,6 +202,80 @@ const LexoraAPI = {
     return true;
   },
 
+  /** Cancel all active requests */
+  cancelAllRequests() {
+    this._activeRequests.forEach((controller, key) => {
+      controller.abort();
+      console.log(`[LexorA] Cancelled request: ${key}`);
+    });
+    this._activeRequests.clear();
+    this._pendingFetches.clear();
+  },
+
+  /** Prevent duplicate fetches */
+  async deduplicatedFetch(key, fetchFn) {
+    if (this._pendingFetches.has(key)) {
+      console.log(`[LexorA] Skipping duplicate fetch for: ${key}`);
+      return this._pendingFetches.get(key);
+    }
+    
+    const promise = fetchFn().finally(() => {
+      this._pendingFetches.delete(key);
+    });
+    
+    this._pendingFetches.set(key, promise);
+    return promise;
+  },
+
+  /** Memory leak prevention */
+  cleanup() {
+    this.cancelAllRequests();
+    if (this._refreshInterval) {
+      clearInterval(this._refreshInterval);
+      this._refreshInterval = null;
+    }
+    this._cache.clear();
+    this._apiHealth.clear();
+    this._requestQueue = [];
+    console.log('[LexorA] Cleanup completed');
+  },
+
+  /** Response validation */
+  validateResponse(key, data) {
+    if (!data) {
+      throw new Error(`No data received for ${key}`);
+    }
+    if (!data.price || !Number.isFinite(Number(data.price))) {
+      throw new Error(`Invalid price for ${key}: ${data.price}`);
+    }
+    if (!this.isValidPrice(key, Number(data.price))) {
+      throw new Error(`Price out of valid range for ${key}: ${data.price}`);
+    }
+    return true;
+  },
+
+  /** Enhanced error logging */
+  logFetchError(key, error, context = {}) {
+    const errorInfo = {
+      asset: key,
+      error: error.message,
+      type: error.name,
+      timestamp: new Date().toISOString(),
+      context: context
+    };
+    console.error('[LexorA] Fetch error:', errorInfo);
+    
+    // Store error for debugging
+    const errorKey = `error_${key}_${Date.now()}`;
+    this._cache.set(errorKey, errorInfo);
+    
+    // Keep only last 50 errors
+    const errorKeys = Array.from(this._cache.keys()).filter(k => k.startsWith('error_'));
+    if (errorKeys.length > 50) {
+      errorKeys.slice(0, errorKeys.length - 50).forEach(k => this._cache.delete(k));
+    }
+  },
+
   /** Request queuing to prevent rate limiting */
   async queueRequest(fn) {
     return new Promise((resolve, reject) => {
@@ -271,11 +348,14 @@ const LexoraAPI = {
     return Number(amountUsd) * rate;
   },
 
-  async fetchJson(url) {
+  async fetchJson(url, options = {}) {
     const ctrl = new AbortController();
+    const requestId = `${url}_${Date.now()}`;
+    this._activeRequests.set(requestId, ctrl);
+    
     const t = setTimeout(() => ctrl.abort(), this.TIMEOUT);
     try {
-      const headers = { Accept: "application/json" };
+      const headers = { Accept: "application/json", ...options.headers };
       
       // Add JWT token if available
       const token = localStorage.getItem('lexora_token');
@@ -287,9 +367,14 @@ const LexoraAPI = {
         signal: ctrl.signal,
         cache: "no-store",
         headers: headers,
-        credentials: 'include'
+        credentials: 'include',
+        ...options
       });
-      if (!r.ok) throw new Error(String(r.status));
+      
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      
       const text = await r.text();
       let data;
       try {
@@ -298,6 +383,7 @@ const LexoraAPI = {
         console.error("[LexorA] JSON parse error:", e.message, "Response:", text.substring(0, 200));
         throw new Error("Invalid JSON response");
       }
+      
       if (data && typeof data.contents === "string") {
         try {
           data = JSON.parse(data.contents);
@@ -305,6 +391,7 @@ const LexoraAPI = {
           console.error("[LexorA] Nested JSON parse error:", e.message);
         }
       }
+      
       return data;
     } catch (e) {
       if (e.name === 'AbortError') {
@@ -313,6 +400,7 @@ const LexoraAPI = {
       throw e;
     } finally {
       clearTimeout(t);
+      this._activeRequests.delete(requestId);
     }
   },
 
@@ -1073,50 +1161,114 @@ const LexoraAPI = {
 
   /** Main market fetch — static APIs only for GitHub Pages */
   async fetchMarket(force = false) {
+    // Cancel any existing requests to prevent overlapping
+    this.cancelAllRequests();
+    
     // Static GitHub Pages - no Flask backend, use frontend APIs only
     const assets = {};
-    const fast = await this.fetchMarketFastLane();
-
-    if (fast.gold) this.putMarketAsset(assets, "gold", fast.gold, true);
-    if (fast.silver) this.putMarketAsset(assets, "silver", fast.silver, true);
-    if (fast.platinum) this.putMarketAsset(assets, "platinum", fast.platinum, true);
-    if (fast.palladium) this.putMarketAsset(assets, "palladium", fast.palladium, true);
-    Object.entries(fast.crypto).forEach(([k, v]) => this.putMarketAsset(assets, k, v, true));
-    if (fast.forex.usd_inr) {
-      this.putMarketAsset(
-        assets,
-        "usd_inr",
-        { price: fast.forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" },
-        true
-      );
-    }
-    if (fast.forex.eur_usd) {
-      this.putMarketAsset(
-        assets,
-        "eur_usd",
-        { price: fast.forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" },
-        true
-      );
-    }
-    if (fast.forex.gbp_usd) {
-      this.putMarketAsset(
-        assets,
-        "gbp_usd",
-        { price: fast.forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" },
-        true
-      );
-    }
-
-    // No fallback data - only show live data from APIs
-    // If no data available, display DATA UNAVAILABLE in UI
-
+    
     try {
-      const extras = await this.withTimeout(this.fetchMarketExtras(), 8000);
-      Object.entries(extras).forEach(([key, y]) => {
-        if (y) this.putMarketAsset(assets, key, y, true);
+      const fast = await this.fetchMarketFastLane();
+
+      if (fast.gold) {
+        try {
+          this.validateResponse('gold', fast.gold);
+          this.putMarketAsset(assets, "gold", fast.gold, true);
+        } catch (e) {
+          this.logFetchError('gold', e, { source: 'fastlane' });
+        }
+      }
+      if (fast.silver) {
+        try {
+          this.validateResponse('silver', fast.silver);
+          this.putMarketAsset(assets, "silver", fast.silver, true);
+        } catch (e) {
+          this.logFetchError('silver', e, { source: 'fastlane' });
+        }
+      }
+      if (fast.platinum) {
+        try {
+          this.validateResponse('platinum', fast.platinum);
+          this.putMarketAsset(assets, "platinum", fast.platinum, true);
+        } catch (e) {
+          this.logFetchError('platinum', e, { source: 'fastlane' });
+        }
+      }
+      if (fast.palladium) {
+        try {
+          this.validateResponse('palladium', fast.palladium);
+          this.putMarketAsset(assets, "palladium", fast.palladium, true);
+        } catch (e) {
+          this.logFetchError('palladium', e, { source: 'fastlane' });
+        }
+      }
+      
+      Object.entries(fast.crypto).forEach(([k, v]) => {
+        try {
+          this.validateResponse(k, v);
+          this.putMarketAsset(assets, k, v, true);
+        } catch (e) {
+          this.logFetchError(k, e, { source: 'crypto' });
+        }
       });
+      
+      if (fast.forex.usd_inr) {
+        try {
+          this.validateResponse('usd_inr', { price: fast.forex.usd_inr });
+          this.putMarketAsset(
+            assets,
+            "usd_inr",
+            { price: fast.forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" },
+            true
+          );
+        } catch (e) {
+          this.logFetchError('usd_inr', e, { source: 'forex' });
+        }
+      }
+      if (fast.forex.eur_usd) {
+        try {
+          this.validateResponse('eur_usd', { price: fast.forex.eur_usd });
+          this.putMarketAsset(
+            assets,
+            "eur_usd",
+            { price: fast.forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" },
+            true
+          );
+        } catch (e) {
+          this.logFetchError('eur_usd', e, { source: 'forex' });
+        }
+      }
+      if (fast.forex.gbp_usd) {
+        try {
+          this.validateResponse('gbp_usd', { price: fast.forex.gbp_usd });
+          this.putMarketAsset(
+            assets,
+            "gbp_usd",
+            { price: fast.forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" },
+            true
+          );
+        } catch (e) {
+          this.logFetchError('gbp_usd', e, { source: 'forex' });
+        }
+      }
+
+      // Fetch extra assets with validation
+      const extras = await this.fetchMarketExtras();
+      Object.entries(extras).forEach(([k, v]) => {
+        try {
+          this.validateResponse(k, v);
+          this.putMarketAsset(assets, k, v, true);
+        } catch (e) {
+          this.logFetchError(k, e, { source: 'extras' });
+        }
+      });
+
+      // No fallback data - only show live data from APIs
+      // If no data available, display DATA UNAVAILABLE in UI
+
     } catch (e) {
-      console.warn("[LexorA] extras:", e.message);
+      console.error("[LexorA] Market fetch error:", e);
+      this.logFetchError('market', e, { source: 'fetchMarket' });
     }
 
     return this.finalizeMarket(assets);

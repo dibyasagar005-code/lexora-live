@@ -47,6 +47,13 @@ const LexoraApp = {
     if (document.getElementById("quickSignals")) this.loadQuickSignals();
     if (document.getElementById("comparisonChart")) LexoraCharts.initComparisonChart("comparisonChart");
     if (document.getElementById("livePriceChart")) LexoraCharts.initLivePriceChart("livePriceChart");
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      if (typeof LexoraAPI !== "undefined") {
+        LexoraAPI.cleanup();
+      }
+    });
   },
 
   initNav() {
@@ -245,6 +252,11 @@ const LexoraApp = {
         if (subEl) subEl.textContent = "";
         const changeEl = card.querySelector(".card-change");
         if (changeEl) changeEl.textContent = "";
+        const spotEl = card.querySelector(".card-spot");
+        if (spotEl) {
+          spotEl.textContent = "OFFLINE";
+          spotEl.className = "card-spot spot-offline";
+        }
       });
       return;
     }
@@ -255,6 +267,10 @@ const LexoraApp = {
         const mainEl = card.querySelector(".card-price-main, .card-price");
         const subEl = card.querySelector(".card-price-sub");
         const changeEl = card.querySelector(".card-change");
+        
+        // Remove loading state
+        mainEl?.classList.remove("loading");
+        
         if (mainEl) {
           mainEl.classList.add("price-flash");
           mainEl.textContent = display.primary;
