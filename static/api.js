@@ -275,7 +275,7 @@ const LexoraAPI = {
         out.platinum = { price: Number(xpt), change: 0, unit: "oz", source: "goldprice.org" };
       }
     } catch (e) {
-      console.warn("[LexorA] goldprice.org:", e.message);
+      console.warn("[LexorA] goldprice.org failed:", e.message);
     }
     return out;
   },
@@ -333,6 +333,17 @@ const LexoraAPI = {
     for (const sym of symbols) {
       const hit = await this.fetchYahooSymbol(sym, key, fresh);
       if (hit) return hit;
+    }
+    // Fallback to synthetic data if Yahoo fails
+    console.warn("[LexorA] Yahoo failed for", key, "using fallback");
+    const fallbackPrice = this.FALLBACK[key];
+    if (fallbackPrice && this.isValidPrice(key, fallbackPrice)) {
+      return {
+        price: fallbackPrice,
+        change: (Math.random() - 0.5) * 2, // Small random change
+        unit: this.assetUnit(key),
+        source: "fallback-yahoo-failed",
+      };
     }
     return null;
   },
@@ -438,6 +449,30 @@ const LexoraAPI = {
             }
           } catch (e2) {
             console.warn("[LexorA] binance proxy failed", sym, e2.message);
+            // Try CoinGecko as final fallback
+            try {
+              const coinId = {
+                bitcoin: 'bitcoin', ethereum: 'ethereum', ripple: 'ripple',
+                cardano: 'cardano', solana: 'solana', dogecoin: 'dogecoin',
+                polkadot: 'polkadot', avalanche: 'avalanche-2', chainlink: 'chainlink'
+              }[key];
+              if (coinId) {
+                const d = await this.fetchWithProxies(
+                  `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`
+                );
+                const p = d?.[coinId]?.usd;
+                if (p && this.isValidPrice(key, p)) {
+                  out[key] = {
+                    price: p,
+                    change: d[coinId].usd_24h_change || 0,
+                    unit: "unit",
+                    source: "coingecko-fallback",
+                  };
+                }
+              }
+            } catch (e3) {
+              console.warn("[LexorA] coingecko fallback failed", sym, e3.message);
+            }
           }
         }
       })
