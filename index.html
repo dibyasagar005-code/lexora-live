@@ -310,8 +310,18 @@
   <script src="static/config.js"></script>
   <script src="static/api.js"></script>
   <script src="static/ai.js"></script>
+  <script src="static/api-audit.js"></script>
   <script src="static/charts.js"></script>
   <script src="static/app.js"></script>
+  
+  <script>
+    // Run API audit on page load for debugging
+    window.addEventListener('load', async () => {
+      console.log('=== Running LexorA API Audit ===');
+      const report = await LexoraAPIAudit.runFullAudit();
+      console.log('Audit complete:', report);
+    });
+  </script>
   
   <!-- Service Worker Registration for PWA -->
   <script>
