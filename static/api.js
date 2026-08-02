@@ -341,7 +341,7 @@ const LexoraAPI = {
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
   async fetchFxRates() {
     const urls = [
-      "https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP,JPY,AUD,CAD",
+      "https://api.frankfurter.dev/v1/latest?from=USD&to=INR,EUR,GBP,JPY,AUD,CAD",
       "https://open.er-api.com/v6/latest/USD",
     ];
     for (const url of urls) {
@@ -1130,27 +1130,36 @@ const LexoraAPI = {
     };
   },
 
-  /** Fast lane: IBJA India + Minted Metal + Binance + FX (CORS-safe) */
+  /** Fast lane: Gold-API + Binance + FX (CORS-safe) */
   async fetchMarketFastLane() {
+    console.log('[LexorA] Starting fetchMarketFastLane');
     await this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT).catch(() => {});
 
-    const [ibjaR, mintedR, cryptoR, forexR] = await Promise.allSettled([
-      this.withTimeout(this.fetchIBJAIndia(), this.FETCH_TIMEOUT),
-      this.withTimeout(this.fetchMintedMetal(), this.FETCH_TIMEOUT),
+    // Use only working APIs - IBJA and Minted Metal are down
+    const [goldApiR, silverApiR, cryptoR, forexR] = await Promise.allSettled([
+      this.withTimeout(this.fetchGoldApiSpot(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchGoldApiMetal("XAG", "silver"), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchCrypto(), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchForex(), this.FETCH_TIMEOUT),
     ]);
 
-    const ibja = this.unwrapSettled(ibjaR) || {};
-    const minted = this.unwrapSettled(mintedR) || {};
+    const goldApi = this.unwrapSettled(goldApiR) || {};
+    const silverApi = this.unwrapSettled(silverApiR) || {};
     const crypto = this.unwrapSettled(cryptoR) || {};
     const forex = this.unwrapSettled(forexR) || {};
 
+    console.log('[LexorA] Fast lane results:', {
+      goldApi: goldApi ? 'success' : 'failed',
+      silverApi: silverApi ? 'success' : 'failed',
+      crypto: Object.keys(crypto).length,
+      forex: Object.keys(forex).length
+    });
+
     return {
-      gold: this.mergeMetalQuote(ibja.gold, minted.gold),
-      silver: this.mergeMetalQuote(ibja.silver, minted.silver),
-      platinum: minted.platinum,
-      palladium: minted.palladium,
+      gold: goldApi,
+      silver: silverApi,
+      platinum: null, // Will be fetched from extras
+      palladium: null,
       crypto: crypto,
       forex: forex,
     };
@@ -1159,30 +1168,60 @@ const LexoraAPI = {
   /** Extra assets with per-call timeout (non-blocking feel) */
   async fetchMarketExtras() {
     const out = {};
-    const metalKeys = ["platinum", "palladium", "copper", "aluminum", "nickel", "zinc", "lead"];
-    const stockKeys = ["sp500", "nasdaq", "crude_oil", "natural_gas", "dow_jones", "ftse_100", "nikkei_225", "apple", "microsoft", "google", "amazon", "tesla"];
-    await Promise.all(
-      [...metalKeys, ...stockKeys].map(async (key) => {
-        const y = await this.withTimeout(this.fetchYahoo(key, true), 5000).catch(() => null);
-        if (y) out[key] = y;
-      })
-    );
-    try {
-      const cg = await this.withTimeout(this.fetchCrypto(), 5000);
-      Object.entries(cg || {}).forEach(([k, v]) => {
-        if (v && !out[k]) out[k] = v;
-      });
-    } catch (e) {
-      /* */
+    
+    // Fetch platinum and palladium from gold-api.com
+    const [platinumR, palladiumR] = await Promise.allSettled([
+      this.fetchGoldApiMetal("XPT", "platinum"),
+      this.fetchGoldApiMetal("XPD", "palladium"),
+    ]);
+    
+    const platinum = this.unwrapSettled(platinumR);
+    const palladium = this.unwrapSettled(palladiumR);
+    
+    if (platinum) out.platinum = platinum;
+    if (palladium) out.palladium = palladium;
+
+    // Fetch stocks and commodities from Yahoo Finance
+    const stockSymbols = {
+      sp500: "^GSPC",
+      nasdaq: "^IXIC",
+      dow_jones: "^DJI",
+      ftse_100: "^FTSE",
+      nikkei_225: "^N225",
+      crude_oil: "CL=F",
+      natural_gas: "NG=F",
+      apple: "AAPL",
+      microsoft: "MSFT",
+      google: "GOOGL",
+      amazon: "AMZN",
+      tesla: "TSLA",
+    };
+
+    for (const [key, sym] of Object.entries(stockSymbols)) {
+      const hit = await this.fetchYahooSymbol(sym, key);
+      if (hit) out[key] = hit;
     }
+    
     return out;
+  },
+
+  async fetchYahooSymbol(symbol, key) {
+    try {
+      const data = await this.fetchYahoo(symbol);
+      if (!data) return null;
+      const price = Number(data.price);
+      const prev = Number(data.prevClose);
+      let change = 0;
+      if (prev > 0) change = ((price - prev) / prev) * 100;
+      return { price, change, unit: "unit", source: "Yahoo Finance" };
+    } catch (e) {
+      console.warn("[LexorA] Yahoo:", e.message);
+      return null;
+    }
   },
 
   /** Main market fetch — static APIs only for GitHub Pages */
   async fetchMarket(force = false) {
-    // Cancel any existing requests to prevent overlapping
-    this.cancelAllRequests();
-    
     // Static GitHub Pages - no Flask backend, use frontend APIs only
     const assets = {};
     
@@ -1190,146 +1229,55 @@ const LexoraAPI = {
       const fast = await this.fetchMarketFastLane();
 
       if (fast.gold) {
-        try {
-          this.validateResponse('gold', fast.gold);
-          this.putMarketAsset(assets, "gold", fast.gold, true);
-        } catch (e) {
-          this.logFetchError('gold', e, { source: 'fastlane' });
-          // Use last verified value if available
-          const lastVerified = this.getLastVerifiedValue('gold');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "gold", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(assets, "gold", fast.gold, true);
       }
       if (fast.silver) {
-        try {
-          this.validateResponse('silver', fast.silver);
-          this.putMarketAsset(assets, "silver", fast.silver, true);
-        } catch (e) {
-          this.logFetchError('silver', e, { source: 'fastlane' });
-          const lastVerified = this.getLastVerifiedValue('silver');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "silver", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(assets, "silver", fast.silver, true);
       }
       if (fast.platinum) {
-        try {
-          this.validateResponse('platinum', fast.platinum);
-          this.putMarketAsset(assets, "platinum", fast.platinum, true);
-        } catch (e) {
-          this.logFetchError('platinum', e, { source: 'fastlane' });
-          const lastVerified = this.getLastVerifiedValue('platinum');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "platinum", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(assets, "platinum", fast.platinum, true);
       }
       if (fast.palladium) {
-        try {
-          this.validateResponse('palladium', fast.palladium);
-          this.putMarketAsset(assets, "palladium", fast.palladium, true);
-        } catch (e) {
-          this.logFetchError('palladium', e, { source: 'fastlane' });
-          const lastVerified = this.getLastVerifiedValue('palladium');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "palladium", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(assets, "palladium", fast.palladium, true);
       }
       
       Object.entries(fast.crypto).forEach(([k, v]) => {
-        try {
-          this.validateResponse(k, v);
-          this.putMarketAsset(assets, k, v, true);
-        } catch (e) {
-          this.logFetchError(k, e, { source: 'crypto' });
-          const lastVerified = this.getLastVerifiedValue(k);
-          if (lastVerified) {
-            this.putMarketAsset(assets, k, { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(assets, k, v, true);
       });
       
       if (fast.forex.usd_inr) {
-        try {
-          this.validateResponse('usd_inr', { price: fast.forex.usd_inr });
-          this.putMarketAsset(
-            assets,
-            "usd_inr",
-            { price: fast.forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" },
-            true
-          );
-        } catch (e) {
-          this.logFetchError('usd_inr', e, { source: 'forex' });
-          const lastVerified = this.getLastVerifiedValue('usd_inr');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "usd_inr", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(
+          assets,
+          "usd_inr",
+          { price: fast.forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" },
+          true
+        );
       }
       if (fast.forex.eur_usd) {
-        try {
-          this.validateResponse('eur_usd', { price: fast.forex.eur_usd });
-          this.putMarketAsset(
-            assets,
-            "eur_usd",
-            { price: fast.forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" },
-            true
-          );
-        } catch (e) {
-          this.logFetchError('eur_usd', e, { source: 'forex' });
-          const lastVerified = this.getLastVerifiedValue('eur_usd');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "eur_usd", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(
+          assets,
+          "eur_usd",
+          { price: fast.forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" },
+          true
+        );
       }
       if (fast.forex.gbp_usd) {
-        try {
-          this.validateResponse('gbp_usd', { price: fast.forex.gbp_usd });
-          this.putMarketAsset(
-            assets,
-            "gbp_usd",
-            { price: fast.forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" },
-            true
-          );
-        } catch (e) {
-          this.logFetchError('gbp_usd', e, { source: 'forex' });
-          const lastVerified = this.getLastVerifiedValue('gbp_usd');
-          if (lastVerified) {
-            this.putMarketAsset(assets, "gbp_usd", { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(
+          assets,
+          "gbp_usd",
+          { price: fast.forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" },
+          true
+        );
       }
 
-      // Fetch extra assets with validation
+      // Fetch extra assets
       const extras = await this.fetchMarketExtras();
       Object.entries(extras).forEach(([k, v]) => {
-        try {
-          this.validateResponse(k, v);
-          this.putMarketAsset(assets, k, v, true);
-        } catch (e) {
-          this.logFetchError(k, e, { source: 'extras' });
-          const lastVerified = this.getLastVerifiedValue(k);
-          if (lastVerified) {
-            this.putMarketAsset(assets, k, { ...lastVerified, live: false }, false);
-          }
-        }
+        this.putMarketAsset(assets, k, v, true);
       });
-
-      // No fallback data - only show live data from APIs
-      // If no data available, display DATA UNAVAILABLE in UI
 
     } catch (e) {
       console.error("[LexorA] Market fetch error:", e);
-      this.logFetchError('market', e, { source: 'fetchMarket' });
-      
-      // On total failure, restore all last verified values
-      this._lastVerifiedValues.forEach((value, key) => {
-        this.putMarketAsset(assets, key, { ...value, live: false }, false);
-      });
     }
 
     return this.finalizeMarket(assets);
