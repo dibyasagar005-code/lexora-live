@@ -202,23 +202,7 @@ const LexoraApp = {
     if (c && this.market?.assets) {
       const n = Object.keys(this.market.assets).length;
       const live = Object.values(this.market.assets).filter((a) => a.live).length;
-      
-      // Check if market is closed (weekends or after hours)
-      const now = new Date();
-      const day = now.getDay();
-      const hour = now.getUTCHours();
-      const isWeekend = day === 0 || day === 6;
-      const isAfterHours = hour < 13 || hour > 21; // Market hours roughly 9am-5pm EST
-      
-      let statusText = `${n} assets · ${live} live · 30s refresh`;
-      if (isWeekend || isAfterHours) {
-        statusText = `${n} assets · MARKET CLOSED · Latest prices`;
-      }
-      if (n === 0) {
-        statusText = "DATA UNAVAILABLE · APIs not responding";
-      }
-      
-      c.textContent = statusText;
+      c.textContent = `${n} assets · ${live} live · 30s refresh`;
     }
   },
 
@@ -236,19 +220,7 @@ const LexoraApp = {
   },
 
   updateMarketCards(market) {
-    if (!market?.assets) {
-      // Display DATA UNAVAILABLE when no market data
-      document.querySelectorAll('[data-symbol]').forEach((card) => {
-        const mainEl = card.querySelector(".card-price-main, .card-price");
-        if (mainEl) mainEl.textContent = "DATA UNAVAILABLE";
-        const subEl = card.querySelector(".card-price-sub");
-        if (subEl) subEl.textContent = "";
-        const changeEl = card.querySelector(".card-change");
-        if (changeEl) changeEl.textContent = "";
-      });
-      return;
-    }
-    
+    if (!market?.assets) return;
     Object.entries(market.assets).forEach(([symbol, asset]) => {
       const display = LexoraAPI.priceDisplay(symbol, asset, this.currency);
       document.querySelectorAll(`[data-symbol="${symbol}"]`).forEach((card) => {
