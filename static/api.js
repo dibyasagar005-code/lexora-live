@@ -137,8 +137,8 @@ const LexoraAPI = {
   },
 
   isLocalFlask() {
-    // Use Flask backend for local development with live data
-    return true;
+    // Use Flask backend for Render deployment
+    return false;
   },
 
   /** Live FX — Frankfurter + open.er-api (both CORS-friendly) */
