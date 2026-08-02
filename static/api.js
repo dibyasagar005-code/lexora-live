@@ -280,6 +280,41 @@ const LexoraAPI = {
     return out;
   },
 
+  /** Alternative gold/silver from Metals-API (free tier) */
+  async fetchMetalsAPI() {
+    const out = {};
+    try {
+      const data = await this.fetchWithProxies("https://api.metals.live/v1/spot");
+      if (data && data.gold && this.isValidPrice("gold", data.gold)) {
+        out.gold = {
+          price: Number(data.gold),
+          change: 0,
+          unit: "oz",
+          source: "metals.live",
+        };
+      }
+      if (data && data.silver && this.isValidPrice("silver", data.silver)) {
+        out.silver = {
+          price: Number(data.silver),
+          change: 0,
+          unit: "oz",
+          source: "metals.live",
+        };
+      }
+      if (data && data.platinum && this.isValidPrice("platinum", data.platinum)) {
+        out.platinum = {
+          price: Number(data.platinum),
+          change: 0,
+          unit: "oz",
+          source: "metals.live",
+        };
+      }
+    } catch (e) {
+      console.warn("[LexorA] metals.live failed:", e.message);
+    }
+    return out;
+  },
+
   yahooChartUrl(symbol, fresh = false) {
     if (fresh) {
       return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
@@ -328,14 +363,47 @@ const LexoraAPI = {
     }
   },
 
-  async fetchYahoo(key, fresh = false) {
-    const symbols = [...new Set([this.YAHOO[key], ...(this.YAHOO_ALT[key] || [])].filter(Boolean))];
-    for (const sym of symbols) {
-      const hit = await this.fetchYahooSymbol(sym, key, fresh);
-      if (hit) return hit;
+  /** Alternative stock data from Twelve Data (free tier) */
+  async fetchTwelveData(symbol, key) {
+    try {
+      // Twelve Data requires API key, using demo endpoint for testing
+      const url = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=demo`;
+      const data = await this.fetchWithProxies(url);
+      const price = Number(data?.price);
+      if (price && this.isValidPrice(key, price)) {
+        return {
+          price: price,
+          change: Number(data?.change || data?.percentage_change || 0),
+          unit: this.assetUnit(key),
+          source: "twelvedata",
+        };
+      }
+    } catch (e) {
+      console.warn("[LexorA] Twelve Data failed for", symbol, e.message);
     }
-    // No fallback - return null if Yahoo fails
-    console.warn("[LexorA] Yahoo failed for", key, "no data available");
+    return null;
+  },
+
+  /** Alternative stock data from Finnhub (free tier) */
+  async fetchFinnhub(symbol, key) {
+    try {
+      // Finnhub requires API key, using demo endpoint
+      const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=demo`;
+      const data = await this.fetchWithProxies(url);
+      const price = Number(data?.c); // current price
+      if (price && this.isValidPrice(key, price)) {
+        const prevClose = Number(data?.pc); // previous close
+        const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+        return {
+          price: price,
+          change: change,
+          unit: this.assetUnit(key),
+          source: "finnhub",
+        };
+      }
+    } catch (e) {
+      console.warn("[LexorA] Finnhub failed for", symbol, e.message);
+    }
     return null;
   },
 
@@ -470,15 +538,26 @@ const LexoraAPI = {
     );
     return out;
   },
-
   async fetchMetal(key) {
     const tries = [];
     if (key === "gold") tries.push(() => this.fetchGoldApiSpot());
     if (key === "silver") tries.push(() => this.fetchGoldApiMetal("XAG", "silver"));
-    tries.push(() => this.fetchYahoo(key, true));
+    if (key === "platinum") tries.push(() => this.fetchGoldApiMetal("XPT", "platinum"));
+    if (key === "palladium") tries.push(() => this.fetchGoldApiMetal("XPD", "palladium"));
+    // Add metals.live as alternative
+    if (["gold", "silver", "platinum", "palladium"].includes(key)) {
+      tries.push(async () => {
+        const metals = await this.fetchMetalsAPI();
+        return metals[key];
+      });
+    }
     for (const fn of tries) {
-      const hit = await fn();
-      if (hit && this.isValidPrice(key, hit.price)) return hit;
+      try {
+        const hit = await fn();
+        if (hit && this.isValidPrice(key, hit.price)) return hit;
+      } catch (e) {
+        /* try next */
+      }
     }
     return null;
   },
@@ -488,6 +567,11 @@ const LexoraAPI = {
     const org = await this.fetchGoldPriceOrg();
     Object.entries(org).forEach(([k, v]) => {
       out[k] = v;
+    });
+    // Try metals.live as alternative
+    const metals = await this.fetchMetalsAPI();
+    Object.entries(metals).forEach(([k, v]) => {
+      if (!out[k] && v) out[k] = v;
     });
     const keys = ["gold", "silver", "platinum", "palladium", "copper"];
     await Promise.all(
@@ -762,16 +846,9 @@ const LexoraAPI = {
   },
 
   fillMissingWithFallback(assets) {
-    Object.keys(this.FALLBACK).forEach((sym) => {
-      if (!assets[sym] || !this.isValidPrice(sym, assets[sym].price)) {
-        this.putMarketAsset(
-          assets,
-          sym,
-          { price: this.FALLBACK[sym], change: 0, unit: this.assetUnit(sym), source: "offline-estimate" },
-          false
-        );
-      }
-    });
+    // No fallback data - only show live data from APIs
+    // If no data available, display DATA UNAVAILABLE in UI
+    console.log("[LexorA] No fallback data - showing only live API data");
   },
 
   finalizeMarket(assets) {
