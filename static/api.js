@@ -107,6 +107,11 @@ const LexoraAPI = {
   },
   _lastPrices: {},
   _sessionBase: null,
+  _cache: new Map(),
+  _cacheTTL: 25000, // 25 seconds cache TTL
+  _apiHealth: new Map(),
+  _requestQueue: [],
+  _isProcessingQueue: false,
 
   loadSessionBase() {
     try {
@@ -123,6 +128,104 @@ const LexoraAPI = {
     } catch (e) {
       /* */
     }
+  },
+
+  /** Intelligent caching with TTL */
+  getCached(key) {
+    const cached = this._cache.get(key);
+    if (!cached) return null;
+    const now = Date.now();
+    if (now - cached.timestamp > this._cacheTTL) {
+      this._cache.delete(key);
+      return null;
+    }
+    return cached.data;
+  },
+
+  setCache(key, data) {
+    this._cache.set(key, {
+      data: data,
+      timestamp: Date.now()
+    });
+  },
+
+  /** Exponential backoff retry logic */
+  async fetchWithRetry(url, options = {}, maxRetries = 3) {
+    let lastError;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const result = await this.fetchJson(url, options);
+        // Update API health on success
+        const apiName = new URL(url).hostname;
+        this._apiHealth.set(apiName, {
+          status: 'healthy',
+          lastSuccess: Date.now(),
+          failures: 0
+        });
+        return result;
+      } catch (e) {
+        lastError = e;
+        const apiName = new URL(url).hostname;
+        const health = this._apiHealth.get(apiName) || { failures: 0 };
+        health.failures++;
+        health.status = health.failures >= 3 ? 'unhealthy' : 'degraded';
+        health.lastError = Date.now();
+        this._apiHealth.set(apiName, health);
+        
+        if (attempt < maxRetries - 1) {
+          const backoffTime = Math.min(1000 * Math.pow(2, attempt), 5000);
+          console.log(`[LexorA] Retry ${attempt + 1}/${maxRetries} for ${url} in ${backoffTime}ms`);
+          await new Promise(resolve => setTimeout(resolve, backoffTime));
+        }
+      }
+    }
+    throw lastError;
+  },
+
+  /** API health check */
+  isAPIHealthy(apiName) {
+    const health = this._apiHealth.get(apiName);
+    if (!health) return true; // Assume healthy if no data
+    if (health.status === 'unhealthy') {
+      // Check if it's been more than 5 minutes since last error
+      if (Date.now() - health.lastError > 300000) {
+        health.status = 'healthy';
+        health.failures = 0;
+        this._apiHealth.set(apiName, health);
+        return true;
+      }
+      return false;
+    }
+    return true;
+  },
+
+  /** Request queuing to prevent rate limiting */
+  async queueRequest(fn) {
+    return new Promise((resolve, reject) => {
+      this._requestQueue.push({ fn, resolve, reject });
+      this.processQueue();
+    });
+  },
+
+  async processQueue() {
+    if (this._isProcessingQueue || this._requestQueue.length === 0) return;
+    this._isProcessingQueue = true;
+    
+    while (this._requestQueue.length > 0) {
+      const { fn, resolve, reject } = this._requestQueue.shift();
+      try {
+        const result = await fn();
+        resolve(result);
+      } catch (e) {
+        reject(e);
+      }
+      // Small delay between requests to prevent rate limiting
+      if (this._requestQueue.length > 0) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+    
+    this._isProcessingQueue = false;
   },
 
   withTimeout(promise, ms = this.FETCH_TIMEOUT) {
@@ -188,11 +291,26 @@ const LexoraAPI = {
       });
       if (!r.ok) throw new Error(String(r.status));
       const text = await r.text();
-      let data = JSON.parse(text);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error("[LexorA] JSON parse error:", e.message, "Response:", text.substring(0, 200));
+        throw new Error("Invalid JSON response");
+      }
       if (data && typeof data.contents === "string") {
-        data = JSON.parse(data.contents);
+        try {
+          data = JSON.parse(data.contents);
+        } catch (e) {
+          console.error("[LexorA] Nested JSON parse error:", e.message);
+        }
       }
       return data;
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        throw new Error(`Request timeout after ${this.TIMEOUT}ms`);
+      }
+      throw e;
     } finally {
       clearTimeout(t);
     }
@@ -249,9 +367,15 @@ const LexoraAPI = {
 
   /** Gold + silver spot from global feed (works when Yahoo blocked) */
   async fetchGoldPriceOrg() {
+    const cacheKey = 'goldprice_org';
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+
     const out = {};
     try {
-      const data = await this.fetchWithProxies("https://data-asg.goldprice.org/dbXRates/USD");
+      const data = await this.queueRequest(() => 
+        this.fetchWithRetry("https://data-asg.goldprice.org/dbXRates/USD")
+      );
       const item = (Array.isArray(data?.items) ? data.items[0] : null) || data;
       if (!item) return out;
       if (item.xauPrice && this.isValidPrice("gold", item.xauPrice)) {
@@ -277,14 +401,22 @@ const LexoraAPI = {
     } catch (e) {
       console.warn("[LexorA] goldprice.org failed:", e.message);
     }
+    
+    this.setCache(cacheKey, out);
     return out;
   },
 
   /** Alternative gold/silver from Metals-API (free tier) */
   async fetchMetalsAPI() {
+    const cacheKey = 'metals_live';
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+
     const out = {};
     try {
-      const data = await this.fetchWithProxies("https://api.metals.live/v1/spot");
+      const data = await this.queueRequest(() => 
+        this.fetchWithRetry("https://api.metals.live/v1/spot")
+      );
       if (data && data.gold && this.isValidPrice("gold", data.gold)) {
         out.gold = {
           price: Number(data.gold),
@@ -312,6 +444,8 @@ const LexoraAPI = {
     } catch (e) {
       console.warn("[LexorA] metals.live failed:", e.message);
     }
+    
+    this.setCache(cacheKey, out);
     return out;
   },
 
@@ -350,7 +484,9 @@ const LexoraAPI = {
 
   async fetchYahooSymbol(sym, key, fresh = false) {
     try {
-      const data = await this.fetchWithProxies(this.yahooChartUrl(sym, fresh));
+      const data = await this.queueRequest(() => 
+        this.fetchWithRetry(this.yahooChartUrl(sym, fresh))
+      );
       const parsed = this.parseYahooChart(data);
       if (!parsed || !this.isValidPrice(key, parsed.price)) return null;
       return {
@@ -366,9 +502,10 @@ const LexoraAPI = {
   /** Alternative stock data from Twelve Data (free tier) */
   async fetchTwelveData(symbol, key) {
     try {
-      // Twelve Data requires API key, using demo endpoint for testing
       const url = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=demo`;
-      const data = await this.fetchWithProxies(url);
+      const data = await this.queueRequest(() => 
+        this.fetchWithRetry(url)
+      );
       const price = Number(data?.price);
       if (price && this.isValidPrice(key, price)) {
         return {
@@ -387,9 +524,10 @@ const LexoraAPI = {
   /** Alternative stock data from Finnhub (free tier) */
   async fetchFinnhub(symbol, key) {
     try {
-      // Finnhub requires API key, using demo endpoint
       const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=demo`;
-      const data = await this.fetchWithProxies(url);
+      const data = await this.queueRequest(() => 
+        this.fetchWithRetry(url)
+      );
       const price = Number(data?.c); // current price
       if (price && this.isValidPrice(key, price)) {
         const prevClose = Number(data?.pc); // previous close
@@ -468,18 +606,23 @@ const LexoraAPI = {
   },
 
   async fetchCryptoBinance() {
+    const cacheKey = 'crypto_binance';
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+
     const out = {};
     const pairs = {
       bitcoin: "BTCUSDT", ethereum: "ETHUSDT", ripple: "XRPUSDT",
       cardano: "ADAUSDT", solana: "SOLUSDT", dogecoin: "DOGEUSDT",
       polkadot: "DOTUSDT", avalanche: "AVAXUSDT", chainlink: "LINKUSDT"
     };
+    
     await Promise.all(
       Object.entries(pairs).map(async ([key, sym]) => {
         try {
           // Try direct API first (Binance supports CORS)
-          const d = await this.fetchJson(
-            this.cacheBust(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`)
+          const d = await this.queueRequest(() => 
+            this.fetchWithRetry(this.cacheBust(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`))
           );
           const p = Number(d.lastPrice);
           if (this.isValidPrice(key, p)) {
@@ -494,8 +637,8 @@ const LexoraAPI = {
           console.warn("[LexorA] binance direct failed", sym, e.message);
           // Try with proxy as fallback
           try {
-            const d = await this.fetchWithProxies(
-              `https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`
+            const d = await this.queueRequest(() => 
+              this.fetchWithRetry(this.cacheBust(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`))
             );
             const p = Number(d.lastPrice);
             if (this.isValidPrice(key, p)) {
@@ -516,8 +659,8 @@ const LexoraAPI = {
                 polkadot: 'polkadot', avalanche: 'avalanche-2', chainlink: 'chainlink'
               }[key];
               if (coinId) {
-                const d = await this.fetchWithProxies(
-                  `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`
+                const d = await this.queueRequest(() => 
+                  this.fetchWithRetry(this.cacheBust(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`))
                 );
                 const p = d?.[coinId]?.usd;
                 if (p && this.isValidPrice(key, p)) {
@@ -536,6 +679,8 @@ const LexoraAPI = {
         }
       })
     );
+    
+    this.setCache(cacheKey, out);
     return out;
   },
   async fetchMetal(key) {
@@ -687,6 +832,10 @@ const LexoraAPI = {
   },
 
   async fetchForex() {
+    const cacheKey = 'forex_rates';
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+
     const urls = [
       "https://api.frankfurter.app/latest?from=USD&to=INR,EUR,GBP",
       "https://open.er-api.com/v6/latest/USD",
@@ -694,29 +843,37 @@ const LexoraAPI = {
     for (const url of urls) {
       try {
         // Try direct API first (Frankfurter supports CORS)
-        const data = await this.fetchJson(this.cacheBust(url));
+        const data = await this.queueRequest(() => 
+          this.fetchWithRetry(this.cacheBust(url))
+        );
         const r = data.rates || {};
         if (r.INR) {
-          return {
+          const result = {
             usd_inr: Number(r.INR),
             eur_usd: r.EUR ? 1 / Number(r.EUR) : null,
             gbp_usd: r.GBP ? 1 / Number(r.GBP) : null,
             source: "live-fx",
           };
+          this.setCache(cacheKey, result);
+          return result;
         }
       } catch (e) {
         console.warn("[LexorA] forex direct failed", e.message);
         // Try with proxy as fallback
         try {
-          const data = await this.fetchWithProxies(url);
+          const data = await this.queueRequest(() => 
+            this.fetchWithRetry(this.cacheBust(url))
+          );
           const r = data.rates || {};
           if (r.INR) {
-            return {
+            const result = {
               usd_inr: Number(r.INR),
               eur_usd: r.EUR ? 1 / Number(r.EUR) : null,
               gbp_usd: r.GBP ? 1 / Number(r.GBP) : null,
               source: "live-fx-proxy",
             };
+            this.setCache(cacheKey, result);
+            return result;
           }
         } catch (e2) {
           console.warn("[LexorA] forex proxy failed", e2.message);
