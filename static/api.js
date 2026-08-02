@@ -115,6 +115,7 @@ const LexoraAPI = {
   _activeRequests: new Map(), // Track active requests for cancellation
   _pendingFetches: new Map(), // Prevent duplicate fetches
   _refreshInterval: null, // Track refresh interval for cleanup
+  _lastVerifiedValues: new Map(), // Store last verified market values with timestamps
 
   loadSessionBase() {
     try {
@@ -252,6 +253,22 @@ const LexoraAPI = {
       throw new Error(`Price out of valid range for ${key}: ${data.price}`);
     }
     return true;
+  },
+
+  /** Store last verified market value */
+  setLastVerifiedValue(key, data) {
+    this._lastVerifiedValues.set(key, {
+      price: data.price,
+      change: data.change,
+      unit: data.unit,
+      source: data.source,
+      timestamp: Date.now()
+    });
+  },
+
+  /** Get last verified market value */
+  getLastVerifiedValue(key) {
+    return this._lastVerifiedValues.get(key);
   },
 
   /** Enhanced error logging */
@@ -1074,6 +1091,8 @@ const LexoraAPI = {
       inrPerGram999: y.inrPerGram999,
       purity: y.purity,
     };
+    // Store as last verified value
+    this.setLastVerifiedValue(key, assets[key]);
   },
 
   mergeMetalQuote(base, extra) {
@@ -1176,6 +1195,11 @@ const LexoraAPI = {
           this.putMarketAsset(assets, "gold", fast.gold, true);
         } catch (e) {
           this.logFetchError('gold', e, { source: 'fastlane' });
+          // Use last verified value if available
+          const lastVerified = this.getLastVerifiedValue('gold');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "gold", { ...lastVerified, live: false }, false);
+          }
         }
       }
       if (fast.silver) {
@@ -1184,6 +1208,10 @@ const LexoraAPI = {
           this.putMarketAsset(assets, "silver", fast.silver, true);
         } catch (e) {
           this.logFetchError('silver', e, { source: 'fastlane' });
+          const lastVerified = this.getLastVerifiedValue('silver');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "silver", { ...lastVerified, live: false }, false);
+          }
         }
       }
       if (fast.platinum) {
@@ -1192,6 +1220,10 @@ const LexoraAPI = {
           this.putMarketAsset(assets, "platinum", fast.platinum, true);
         } catch (e) {
           this.logFetchError('platinum', e, { source: 'fastlane' });
+          const lastVerified = this.getLastVerifiedValue('platinum');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "platinum", { ...lastVerified, live: false }, false);
+          }
         }
       }
       if (fast.palladium) {
@@ -1200,6 +1232,10 @@ const LexoraAPI = {
           this.putMarketAsset(assets, "palladium", fast.palladium, true);
         } catch (e) {
           this.logFetchError('palladium', e, { source: 'fastlane' });
+          const lastVerified = this.getLastVerifiedValue('palladium');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "palladium", { ...lastVerified, live: false }, false);
+          }
         }
       }
       
@@ -1209,6 +1245,10 @@ const LexoraAPI = {
           this.putMarketAsset(assets, k, v, true);
         } catch (e) {
           this.logFetchError(k, e, { source: 'crypto' });
+          const lastVerified = this.getLastVerifiedValue(k);
+          if (lastVerified) {
+            this.putMarketAsset(assets, k, { ...lastVerified, live: false }, false);
+          }
         }
       });
       
@@ -1223,6 +1263,10 @@ const LexoraAPI = {
           );
         } catch (e) {
           this.logFetchError('usd_inr', e, { source: 'forex' });
+          const lastVerified = this.getLastVerifiedValue('usd_inr');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "usd_inr", { ...lastVerified, live: false }, false);
+          }
         }
       }
       if (fast.forex.eur_usd) {
@@ -1236,6 +1280,10 @@ const LexoraAPI = {
           );
         } catch (e) {
           this.logFetchError('eur_usd', e, { source: 'forex' });
+          const lastVerified = this.getLastVerifiedValue('eur_usd');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "eur_usd", { ...lastVerified, live: false }, false);
+          }
         }
       }
       if (fast.forex.gbp_usd) {
@@ -1249,6 +1297,10 @@ const LexoraAPI = {
           );
         } catch (e) {
           this.logFetchError('gbp_usd', e, { source: 'forex' });
+          const lastVerified = this.getLastVerifiedValue('gbp_usd');
+          if (lastVerified) {
+            this.putMarketAsset(assets, "gbp_usd", { ...lastVerified, live: false }, false);
+          }
         }
       }
 
@@ -1260,6 +1312,10 @@ const LexoraAPI = {
           this.putMarketAsset(assets, k, v, true);
         } catch (e) {
           this.logFetchError(k, e, { source: 'extras' });
+          const lastVerified = this.getLastVerifiedValue(k);
+          if (lastVerified) {
+            this.putMarketAsset(assets, k, { ...lastVerified, live: false }, false);
+          }
         }
       });
 
@@ -1269,6 +1325,11 @@ const LexoraAPI = {
     } catch (e) {
       console.error("[LexorA] Market fetch error:", e);
       this.logFetchError('market', e, { source: 'fetchMarket' });
+      
+      // On total failure, restore all last verified values
+      this._lastVerifiedValues.forEach((value, key) => {
+        this.putMarketAsset(assets, key, { ...value, live: false }, false);
+      });
     }
 
     return this.finalizeMarket(assets);
