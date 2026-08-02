@@ -1,8 +1,8 @@
-// Backend API URL (Render deployment for public access - matches localhost Flask backend)
-const BACKEND_URL = 'https://lexora-live.onrender.com';
+// Backend API URL (GitHub Pages static hosting - no backend)
+const BACKEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
 
 // Frontend URL (for OAuth redirects)
-const FRONTEND_URL = 'https://lexora-live.onrender.com';
+const FRONTEND_URL = 'https://dibyasagar005-code.github.io/lexora-live';
 
 // App configuration
 const CONFIG = {
