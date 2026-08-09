@@ -575,9 +575,9 @@ const LexoraAPI = {
     let price = meta.regularMarketPrice ?? meta.previousClose ?? closes[closes.length - 1];
     if (!price || !Number.isFinite(Number(price))) return null;
     price = Number(price);
-    const prev = closes.length > 1 ? Number(closes[closes.length - 2]) : price;
+    const prev = closes.length > 1 ? Number(closes[closes.length - 2]) : meta.previousClose || price;
     let change = meta.regularMarketChangePercent;
-    if (change == null && prev) change = ((price - prev) / prev) * 100;
+    if (change == null && prev && prev !== price) change = ((price - prev) / prev) * 100;
     return { price, change: Number(change) || 0, closes };
   },
 
@@ -800,6 +800,13 @@ const LexoraAPI = {
         const metals = await this.fetchMetalsAPI();
         return metals[key];
       });
+    }
+    // Add Yahoo Finance for industrial metals (copper, aluminum)
+    if (key === "copper") {
+      tries.push(() => this.fetchYahooSymbol("HG=F", "copper", true));
+    }
+    if (key === "aluminum") {
+      tries.push(() => this.fetchYahooSymbol("ALI=F", "aluminum", true));
     }
     for (const fn of tries) {
       try {
