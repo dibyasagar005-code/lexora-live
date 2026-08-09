@@ -13,6 +13,11 @@
   <link rel="apple-touch-icon" href="static/icons/icon-152x152.png">
   <link rel="stylesheet" href="static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    // Immediate inline test - this should execute before any external scripts
+    console.log('=== INLINE SCRIPT EXECUTED ===');
+    window.LEXORA_INLINE_TEST = 'SUCCESS';
+  </script>
 </head>
 <body data-user-logged-in="false">
   <div class="news-ticker">
