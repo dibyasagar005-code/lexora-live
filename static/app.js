@@ -47,13 +47,15 @@ const LexoraApp = {
     if (document.getElementById("quickSignals")) this.loadQuickSignals();
     if (document.getElementById("comparisonChart")) LexoraCharts.initComparisonChart("comparisonChart");
     if (document.getElementById("livePriceChart")) LexoraCharts.initLivePriceChart("livePriceChart");
-    
+
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
       if (typeof LexoraAPI !== "undefined") {
         LexoraAPI.cleanup();
       }
     });
+
+    console.log("LexorApp.init() completed");
   },
 
   initNav() {
