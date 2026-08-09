@@ -314,6 +314,7 @@
       console.log('CONFIG is available:', CONFIG);
     } else {
       console.error('CONFIG is NOT available');
+      document.getElementById('refreshBadge').textContent = 'ERROR: CONFIG not loaded';
     }
   </script>
   <script src="static/api.js"></script>
@@ -323,10 +324,27 @@
       console.log('LexoraAPI is available');
     } else {
       console.error('LexoraAPI is NOT available');
+      document.getElementById('refreshBadge').textContent = 'ERROR: LexoraAPI not loaded';
     }
   </script>
   <script src="static/ai.js"></script>
+  <script>
+    console.log('ai.js loaded');
+    if (typeof LexoraAI !== 'undefined') {
+      console.log('LexoraAI is available');
+    } else {
+      console.error('LexoraAI is NOT available');
+    }
+  </script>
   <script src="static/charts.js"></script>
+  <script>
+    console.log('charts.js loaded');
+    if (typeof LexoraCharts !== 'undefined') {
+      console.log('LexoraCharts is available');
+    } else {
+      console.error('LexoraCharts is NOT available');
+    }
+  </script>
   <script src="static/app.js"></script>
   <script>
     console.log('app.js loaded');
@@ -334,7 +352,22 @@
       console.log('LexoraApp is available');
     } else {
       console.error('LexoraApp is NOT available');
+      document.getElementById('refreshBadge').textContent = 'ERROR: LexoraApp not loaded';
     }
+  </script>
+  
+  <!-- Global error handler -->
+  <script>
+    window.addEventListener('error', function(e) {
+      console.error('Global error:', e.error);
+      const badge = document.getElementById('refreshBadge');
+      if (badge) badge.textContent = 'JS ERROR: ' + e.message;
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled promise rejection:', e.reason);
+      const badge = document.getElementById('refreshBadge');
+      if (badge) badge.textContent = 'PROMISE ERROR: ' + e.reason;
+    });
   </script>
   
   <!-- Service Worker Registration for PWA -->
