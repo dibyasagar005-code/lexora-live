@@ -1228,6 +1228,20 @@ const LexoraAPI = {
     // Static GitHub Pages - no Flask backend, use frontend APIs only
     const assets = {};
     
+    // Immediately add fallback values so UI shows something
+    Object.entries(this.FALLBACK).forEach(([key, price]) => {
+      assets[key] = {
+        price: Number(price),
+        change: 0,
+        symbol: key.toUpperCase(),
+        unit: this.assetUnit(key),
+        updated: Date.now(),
+        live: false,
+        apiSource: "fallback",
+      };
+    });
+    console.log('[LexorA] Added fallback values for', Object.keys(assets).length, 'assets');
+    
     try {
       const fast = await this.fetchMarketFastLane();
       console.log('[LexorA] Fast lane data received:', fast);
