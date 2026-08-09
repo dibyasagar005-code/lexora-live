@@ -308,10 +308,34 @@
   </div>
   
   <script src="static/config.js"></script>
+  <script>
+    console.log('config.js loaded');
+    if (typeof CONFIG !== 'undefined') {
+      console.log('CONFIG is available:', CONFIG);
+    } else {
+      console.error('CONFIG is NOT available');
+    }
+  </script>
   <script src="static/api.js"></script>
+  <script>
+    console.log('api.js loaded');
+    if (typeof LexoraAPI !== 'undefined') {
+      console.log('LexoraAPI is available');
+    } else {
+      console.error('LexoraAPI is NOT available');
+    }
+  </script>
   <script src="static/ai.js"></script>
   <script src="static/charts.js"></script>
   <script src="static/app.js"></script>
+  <script>
+    console.log('app.js loaded');
+    if (typeof LexoraApp !== 'undefined') {
+      console.log('LexoraApp is available');
+    } else {
+      console.error('LexoraApp is NOT available');
+    }
+  </script>
   
   <!-- Service Worker Registration for PWA -->
   <script>
