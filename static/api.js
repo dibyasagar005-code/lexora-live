@@ -1148,14 +1148,13 @@ const LexoraAPI = {
   /** Fast lane: Gold-API + Binance + FX (CORS-safe) */
   async fetchMarketFastLane() {
     console.log('[LexorA] Starting fetchMarketFastLane');
-    await this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT).catch(() => {});
 
     // Use only working APIs - IBJA and Minted Metal are down
     const [goldApiR, silverApiR, cryptoR, forexR] = await Promise.allSettled([
       this.withTimeout(this.fetchGoldApiSpot(), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchGoldApiMetal("XAG", "silver"), this.FETCH_TIMEOUT),
       this.withTimeout(this.fetchCrypto(), this.FETCH_TIMEOUT),
-      this.withTimeout(this.fetchForex(), this.FETCH_TIMEOUT),
+      this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT),
     ]);
 
     const goldApi = this.unwrapSettled(goldApiR) || {};
