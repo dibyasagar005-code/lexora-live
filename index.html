@@ -309,8 +309,15 @@
   
   <script>
     // Simple test to verify JavaScript is running
-    document.getElementById('refreshBadge').textContent = 'JS Running...';
-    console.log('JavaScript is executing');
+    window.addEventListener('DOMContentLoaded', function() {
+      const badge = document.getElementById('refreshBadge');
+      if (badge) {
+        badge.textContent = 'JS Running...';
+        console.log('JavaScript is executing on DOMContentLoaded');
+      } else {
+        console.error('refreshBadge element not found');
+      }
+    });
   </script>
   <script src="static/config.js"></script>
   <script>
@@ -319,7 +326,6 @@
       console.log('CONFIG is available:', CONFIG);
     } else {
       console.error('CONFIG is NOT available');
-      document.getElementById('refreshBadge').textContent = 'ERROR: CONFIG not loaded';
     }
   </script>
   <script src="static/api.js"></script>
@@ -329,7 +335,6 @@
       console.log('LexoraAPI is available');
     } else {
       console.error('LexoraAPI is NOT available');
-      document.getElementById('refreshBadge').textContent = 'ERROR: LexoraAPI not loaded';
     }
   </script>
   <script src="static/ai.js"></script>
@@ -357,7 +362,6 @@
       console.log('LexoraApp is available');
     } else {
       console.error('LexoraApp is NOT available');
-      document.getElementById('refreshBadge').textContent = 'ERROR: LexoraApp not loaded';
     }
   </script>
   
