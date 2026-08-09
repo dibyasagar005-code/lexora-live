@@ -16,12 +16,18 @@ const LexoraApp = {
 
   init() {
     console.log("LexorApp.init() called");
+    
+    // Show initialization status in UI
+    const statusBadge = document.getElementById("refreshBadge");
+    if (statusBadge) statusBadge.textContent = "Initializing...";
+    
     this.initCurrency();
     if (typeof LexoraAPI !== "undefined") {
       console.log("LexoraAPI is available");
       LexoraAPI.fetchFxRates().then(() => this.updateFxBadge());
     } else {
       console.error("LexoraAPI is not available");
+      if (statusBadge) statusBadge.textContent = "ERROR: LexoraAPI not loaded";
     }
     const ticker = document.getElementById("tickerContent");
     if (ticker && typeof LexoraAPI !== "undefined") {
@@ -35,13 +41,16 @@ const LexoraApp = {
     this.initModal();
     this.renderMarketSkeleton();
     console.log("Starting market data refresh...");
+    if (statusBadge) statusBadge.textContent = "Loading market data...";
     this.refreshMarketData().then(() => {
       console.log("Market data refresh completed");
+      if (statusBadge) statusBadge.textContent = "LIVE · just now";
       if (document.querySelector('.page-view[data-page="prediction"]')) {
         this.activePrediction = "gold";
       }
     }).catch((error) => {
       console.error("Market data refresh failed:", error);
+      if (statusBadge) statusBadge.textContent = "ERROR: " + error.message;
     });
     this.startLiveRefresh();
     if (document.getElementById("quickSignals")) this.loadQuickSignals();
