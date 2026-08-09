@@ -1157,16 +1157,17 @@ const LexoraAPI = {
       this.withTimeout(this.fetchFxRates(), this.FETCH_TIMEOUT),
     ]);
 
-    const goldApi = this.unwrapSettled(goldApiR) || {};
-    const silverApi = this.unwrapSettled(silverApiR) || {};
+    const goldApi = this.unwrapSettled(goldApiR);
+    const silverApi = this.unwrapSettled(silverApiR);
     const crypto = this.unwrapSettled(cryptoR) || {};
-    const forex = this.unwrapSettled(forexR) || {};
+    const forex = this.unwrapSettled(forexR) || this.fxRates;
 
     console.log('[LexorA] Fast lane results:', {
       goldApi: goldApi ? 'success' : 'failed',
       silverApi: silverApi ? 'success' : 'failed',
       crypto: Object.keys(crypto).length,
-      forex: Object.keys(forex).length
+      forex: Object.keys(forex).length,
+      forexData: forex
     });
 
     return {
@@ -1229,33 +1230,44 @@ const LexoraAPI = {
     
     try {
       const fast = await this.fetchMarketFastLane();
+      console.log('[LexorA] Fast lane data received:', fast);
 
-      if (fast.gold) {
+      if (fast.gold && fast.gold.price) {
         this.putMarketAsset(assets, "gold", fast.gold, true);
+        console.log('[LexorA] Gold added:', fast.gold);
+      } else {
+        console.warn('[LexorA] Gold data missing or invalid:', fast.gold);
       }
-      if (fast.silver) {
+      if (fast.silver && fast.silver.price) {
         this.putMarketAsset(assets, "silver", fast.silver, true);
+        console.log('[LexorA] Silver added:', fast.silver);
+      } else {
+        console.warn('[LexorA] Silver data missing or invalid:', fast.silver);
       }
-      if (fast.platinum) {
+      if (fast.platinum && fast.platinum.price) {
         this.putMarketAsset(assets, "platinum", fast.platinum, true);
       }
-      if (fast.palladium) {
+      if (fast.palladium && fast.palladium.price) {
         this.putMarketAsset(assets, "palladium", fast.palladium, true);
       }
       
       Object.entries(fast.crypto).forEach(([k, v]) => {
-        this.putMarketAsset(assets, k, v, true);
+        if (v && v.price) {
+          this.putMarketAsset(assets, k, v, true);
+          console.log(`[LexorA] Crypto ${k} added:`, v);
+        }
       });
       
-      if (fast.forex.INR) {
+      if (fast.forex && fast.forex.INR) {
         this.putMarketAsset(
           assets,
           "usd_inr",
           { price: fast.forex.INR, change: 0, unit: "rate", source: "frankfurter" },
           true
         );
+        console.log('[LexorA] USD/INR added:', fast.forex.INR);
       }
-      if (fast.forex.EUR) {
+      if (fast.forex && fast.forex.EUR) {
         this.putMarketAsset(
           assets,
           "eur_usd",
@@ -1263,7 +1275,7 @@ const LexoraAPI = {
           true
         );
       }
-      if (fast.forex.GBP) {
+      if (fast.forex && fast.forex.GBP) {
         this.putMarketAsset(
           assets,
           "gbp_usd",
@@ -1272,17 +1284,31 @@ const LexoraAPI = {
         );
       }
 
+      console.log('[LexorA] Assets after fast lane:', Object.keys(assets));
+
       // Fetch extra assets
       const extras = await this.fetchMarketExtras();
       Object.entries(extras).forEach(([k, v]) => {
-        this.putMarketAsset(assets, k, v, true);
+        if (v && v.price) {
+          this.putMarketAsset(assets, k, v, true);
+          console.log(`[LexorA] Extra ${k} added:`, v);
+        }
       });
+
+      console.log('[LexorA] Final assets count:', Object.keys(assets).length);
 
     } catch (e) {
       console.error("[LexorA] Market fetch error:", e);
     }
 
-    return this.finalizeMarket(assets);
+    const result = this.finalizeMarket(assets);
+    console.log('[LexorA] Finalize market result:', {
+      total: result.total,
+      liveCount: result.liveCount,
+      source: result.source,
+      assetKeys: Object.keys(result.assets)
+    });
+    return result;
   },
 
   formatPrice(sym, priceUsd, currency) {
