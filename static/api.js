@@ -1175,7 +1175,7 @@ const LexoraAPI = {
       platinum: null, // Will be fetched from extras
       palladium: null,
       crypto: crypto,
-      forex: forex,
+      forex: forex, // forex is the fxRates object with USD: 1, INR: rate, etc.
     };
   },
 
@@ -1247,27 +1247,27 @@ const LexoraAPI = {
         this.putMarketAsset(assets, k, v, true);
       });
       
-      if (fast.forex.usd_inr) {
+      if (fast.forex.INR) {
         this.putMarketAsset(
           assets,
           "usd_inr",
-          { price: fast.forex.usd_inr, change: 0, unit: "rate", source: "frankfurter" },
+          { price: fast.forex.INR, change: 0, unit: "rate", source: "frankfurter" },
           true
         );
       }
-      if (fast.forex.eur_usd) {
+      if (fast.forex.EUR) {
         this.putMarketAsset(
           assets,
           "eur_usd",
-          { price: fast.forex.eur_usd, change: 0, unit: "rate", source: "frankfurter" },
+          { price: fast.forex.EUR, change: 0, unit: "rate", source: "frankfurter" },
           true
         );
       }
-      if (fast.forex.gbp_usd) {
+      if (fast.forex.GBP) {
         this.putMarketAsset(
           assets,
           "gbp_usd",
-          { price: fast.forex.gbp_usd, change: 0, unit: "rate", source: "frankfurter" },
+          { price: fast.forex.GBP, change: 0, unit: "rate", source: "frankfurter" },
           true
         );
       }
