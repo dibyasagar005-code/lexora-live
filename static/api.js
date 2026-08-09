@@ -1205,6 +1205,8 @@ const LexoraAPI = {
       nikkei_225: "^N225",
       crude_oil: "CL=F",
       natural_gas: "NG=F",
+      copper: "HG=F",
+      aluminum: "ALI=F",
       apple: "AAPL",
       microsoft: "MSFT",
       google: "GOOGL",
@@ -1220,20 +1222,6 @@ const LexoraAPI = {
     return out;
   },
 
-  async fetchYahooSymbol(symbol, key) {
-    try {
-      const data = await this.fetchYahoo(symbol);
-      if (!data) return null;
-      const price = Number(data.price);
-      const prev = Number(data.prevClose);
-      let change = 0;
-      if (prev > 0) change = ((price - prev) / prev) * 100;
-      return { price, change, unit: "unit", source: "Yahoo Finance" };
-    } catch (e) {
-      console.warn("[LexorA] Yahoo:", e.message);
-      return null;
-    }
-  },
 
   /** Main market fetch — static APIs only for GitHub Pages */
   async fetchMarket(force = false) {
