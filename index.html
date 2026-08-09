@@ -17,6 +17,16 @@
     // Immediate inline test - this should execute before any external scripts
     console.log('=== INLINE SCRIPT EXECUTED ===');
     window.LEXORA_INLINE_TEST = 'SUCCESS';
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('=== DOM CONTENT LOADED ===');
+      const badge = document.getElementById('refreshBadge');
+      if (badge) {
+        badge.textContent = 'JS Working - ' + new Date().toLocaleTimeString();
+        console.log('Badge updated');
+      } else {
+        console.error('Badge element not found');
+      }
+    });
   </script>
 </head>
 <body data-user-logged-in="false">
