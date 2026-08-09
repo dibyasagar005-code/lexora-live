@@ -291,7 +291,7 @@ const LexoraApp = {
     grid.innerHTML = displayAssets.map((sym) => `
       <div class="market-card" data-symbol="${sym}">
         <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="card-spot">LIVE</span></div>
-        <div class="card-price-main loading"></div>
+        <div class="card-price-main"></div>
         <div class="card-price-sub"></div>
         <div class="card-change"></div>
         <a href="#" class="card-link" data-goto-pred="${sym}">Predict →</a>
@@ -305,7 +305,7 @@ const LexoraApp = {
       });
     });
     const c = document.getElementById("assetCount");
-    if (c) c.textContent = "Loading market data...";
+    if (c) c.textContent = "";
   },
 
   renderMarketsTable() {
