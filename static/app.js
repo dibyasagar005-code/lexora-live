@@ -286,14 +286,18 @@ const LexoraApp = {
 
   renderMarketSkeleton() {
     const grid = document.getElementById("homeMarketGrid");
-    if (!grid) return;
+    if (!grid) {
+      console.error('[LexorApp] homeMarketGrid element not found');
+      return;
+    }
     const symbols = Object.keys(LexoraAPI.FALLBACK);
     const featuredAssets = ["gold", "silver", "bitcoin", "ethereum", "crude_oil", "sp500", "nasdaq", "tesla", "solana", "apple", "natural_gas", "usd_inr"];
     const displayAssets = featuredAssets.filter(s => symbols.includes(s));
+    console.log('[LexorApp] Rendering market skeleton with assets:', displayAssets);
     grid.innerHTML = displayAssets.map((sym) => `
       <div class="market-card" data-symbol="${sym}">
         <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="card-spot">LIVE</span></div>
-        <div class="card-price-main"></div>
+        <div class="card-price-main loading">Loading...</div>
         <div class="card-price-sub"></div>
         <div class="card-change"></div>
         <a href="#" class="card-link" data-goto-pred="${sym}">Predict →</a>
@@ -308,6 +312,7 @@ const LexoraApp = {
     });
     const c = document.getElementById("assetCount");
     if (c) c.textContent = "";
+    console.log('[LexorApp] Market skeleton rendered with', displayAssets.length, 'cards');
   },
 
   renderMarketsTable() {
