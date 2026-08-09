@@ -1110,9 +1110,17 @@ const LexoraAPI = {
   },
 
   fillMissingWithFallback(assets) {
-    // No fallback data - only show live data from APIs
-    // If no data available, display DATA UNAVAILABLE in UI
-    console.log("[LexorA] No fallback data - showing only live API data");
+    // Use last verified values for assets that don't have current data
+    this._lastVerifiedValues.forEach((value, key) => {
+      if (!assets[key]) {
+        assets[key] = {
+          ...value,
+          live: false,
+          apiSource: "last-verified",
+        };
+        console.log(`[LexorA] Using last verified value for ${key}`);
+      }
+    });
   },
 
   finalizeMarket(assets) {

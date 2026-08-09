@@ -150,10 +150,7 @@ const LexoraApp = {
       return;
     }
     this._marketRefreshInFlight = true;
-    const pulse = document.querySelector(".pulse-text");
-    const grid = document.getElementById("homeMarketGrid");
-    if (grid) grid.classList.add("market-loading");
-    if (pulse) pulse.textContent = "Updating live data…";
+    // Silent refresh - no loading indicators
     try {
       this.market = await LexoraAPI.fetchMarket(force);
       this.lastMarketFetch = Date.now();
@@ -170,14 +167,6 @@ const LexoraApp = {
         Object.values(this.market.assets || {}).filter((a) => a.live).length;
       const total = Object.keys(this.market.assets || {}).length;
       if (src) src.textContent = `${this.market.source.toUpperCase()} · ${liveN} live · 30s`;
-      if (pulse) {
-        pulse.textContent =
-          this.market.source === "live"
-            ? `● INSTANT LIVE (${liveN}/${total})`
-            : this.market.source === "mixed"
-              ? `● LIVE (${liveN}/${total})`
-              : `● ESTIMATE (${total} assets)`;
-      }
       if (this.currentPage === "markets") this.renderMarketsTable();
       if (this.currentPage === "calculator") this.syncCalculatorLivePrices();
       if (this.currentPage === "prediction") this.loadPrediction(this.activePrediction);
@@ -187,7 +176,6 @@ const LexoraApp = {
         this.loadMarketSignals();
       }, 0);
     } catch (e) {
-      if (pulse) pulse.textContent = "Retry in 8s…";
       console.error(e);
       if (!this.market?.assets) {
         this.market = LexoraAPI.finalizeMarket({});
@@ -195,7 +183,6 @@ const LexoraApp = {
         this.updateLastRefresh();
       }
     } finally {
-      if (grid) grid.classList.remove("market-loading");
       this._marketRefreshInFlight = false;
       if (this._pendingForceRefresh) {
         this._pendingForceRefresh = false;
@@ -304,9 +291,9 @@ const LexoraApp = {
     grid.innerHTML = displayAssets.map((sym) => `
       <div class="market-card" data-symbol="${sym}">
         <div class="card-header"><span class="symbol-name">${LexoraAPI.label(sym)}</span><span class="card-spot">LIVE</span></div>
-        <div class="card-price-main">—</div>
+        <div class="card-price-main loading"></div>
         <div class="card-price-sub"></div>
-        <div class="card-change">—</div>
+        <div class="card-change"></div>
         <a href="#" class="card-link" data-goto-pred="${sym}">Predict →</a>
       </div>`).join("");
     grid.querySelectorAll("[data-goto-pred]").forEach((a) => {
@@ -318,7 +305,7 @@ const LexoraApp = {
       });
     });
     const c = document.getElementById("assetCount");
-    if (c) c.textContent = "Loading live India & world rates…";
+    if (c) c.textContent = "Loading market data...";
   },
 
   renderMarketsTable() {
